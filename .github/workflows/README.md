@@ -65,9 +65,13 @@ Gates the Webman 2.1 backend against real service containers:
 
 - `mysql:8.0.43` — `MYSQL_ALLOW_EMPTY_PASSWORD=yes`, database `keyquest_test`,
   health-checked via `mysqladmin ping` (10s interval / 5s timeout / 10 retries),
-  port 3306. The repo's `api/docker/mysql-init` is mounted read-only into
-  `/docker-entrypoint-initdb.d` so the CI container gets the same schema
-  (`skeleton_echo` and friends) as the local stack — without it
+  port 3306. The schema (`api/docker/mysql-init/01_schema.sql`, the same file
+  the local stack uses) is applied by an explicit `Apply schema to test
+  database` step via PHP PDO after checkout — NOT by a volume mount into
+  `/docker-entrypoint-initdb.d`. A service container starts before checkout, so
+  a workspace volume mount makes the docker daemon create the mount source
+  (`api/docker`) as root in the still-empty workspace and `actions/checkout`'s
+  clean step fails with `EACCES: permission denied, rmdir`. Without the schema
   `POST /auth/echo` fails with SQLSTATE 42S02.
 - `ghcr.io/dragonflydb/dragonfly:v1.29.0` — pinned per plan §13.5 (Dragonfly
   compatibility fence); matches `/toolchain.md`.

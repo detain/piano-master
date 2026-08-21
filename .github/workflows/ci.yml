@@ -103,7 +103,6 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
-          --volume="${{ github.workspace }}/api/docker/mysql-init:/docker-entrypoint-initdb.d:ro"
       dragonfly:
         # Pinned image tag per plan §13.5 (Dragonfly compatibility fence);
         # matches /toolchain.md. Pull from GHCR (ghcr.io/dragonflydb/dragonfly):
@@ -125,6 +124,25 @@ jobs:
           set -euxo pipefail
           cd api
           composer install --no-interaction --prefer-dist
+
+      # The MySQL service container creates only `keyquest_test` (zero tables).
+      # Apply the init SQL in a step instead of mounting api/docker/mysql-init
+      # into /docker-entrypoint-initdb.d: a service starts BEFORE checkout, so
+      # the docker daemon creates the mount source (api/docker) as root inside
+      # the still-empty workspace and actions/checkout's clean step fails with
+      # EACCES on rmdir. pdo_mysql is guaranteed by setup-php above.
+      - name: Apply schema to test database
+        run: |
+          set -euxo pipefail
+          cd api
+          php -r '
+            $pdo = new PDO(
+              "mysql:host=127.0.0.1;port=3306;dbname=keyquest_test",
+              "root",
+              ""
+            );
+            $pdo->exec(file_get_contents("docker/mysql-init/01_schema.sql"));
+          '
 
       - name: Run test suite
         # The MySQL service container creates only `keyquest_test`; point the
