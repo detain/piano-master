@@ -1,0 +1,6 @@
+<resources>
+    <!-- TODO(design-system): align Theme.KeyQuest with the KeyQuest design system
+         (colors, typography, motion) once the design pass starts. Kept dependency-free
+         for v1: no AppCompat/Material Components library yet. -->
+    <style name="Theme.KeyQuest" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

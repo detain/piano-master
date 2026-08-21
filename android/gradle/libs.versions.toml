@@ -1,0 +1,44 @@
+# KeyQuest Android version catalog.
+#
+# Known-good toolchain pairing (pinned per plan §20 P0.1.2 so CI and laptops
+# build byte-identical artifacts):
+#   AGP 8.9.1        -- first stable AGP line with full compileSdk 36 (Android 16) support.
+#   Gradle 8.11.1    -- meets AGP 8.9's minimum (8.11.1); stable, widely deployed.
+#   Kotlin 2.2.0     -- stable KGP tested against AGP through 8.11 and Gradle through 8.14.
+#                       Since Kotlin 2.0 the Compose compiler ships with Kotlin, so the
+#                       org.jetbrains.kotlin.plugin.compose version tracks the Kotlin version.
+#   Compose BOM 2025.01.00 -- stable Jan-2025 BOM (ui 1.7.x, material3 1.3.x).
+#
+# Future workspaces (plan §3.2) will add Room, DataStore, Retrofit, Hilt,
+# Media3, Play Billing and the NDK audio engine as new entries here -- the
+# catalog keeps versions centralized so those land without touching module scripts.
+
+[versions]
+agp = "8.9.1"
+kotlin = "2.2.0"
+coreKtx = "1.15.0"
+lifecycleRuntimeKtx = "2.8.7"
+activityCompose = "1.9.3"
+composeBom = "2025.01.00"
+junit = "4.13.2"
+junitExt = "1.2.1"
+espressoCore = "3.6.1"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit-ext = { group = "androidx.test.ext", name = "junit", version.ref = "junitExt" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

@@ -1,0 +1,34 @@
+# --- PHP (api) ---
+/api/vendor/
+/api/.env
+/api/.phpunit.cache/
+
+# --- Node (cms) ---
+/cms/node_modules/
+/cms/dist/
+/cms/.vite/
+
+# --- Python (pipeline) ---
+/pipeline/.venv/
+/pipeline/venv/
+**/__pycache__/
+*.py[cod]
+/pipeline/.pytest_cache/
+/pipeline/.ruff_cache/
+/pipeline/*.egg-info/
+
+# --- Engine (C++) ---
+/engine/build*/
+
+# --- Content (song build artifacts) ---
+/content/songs/**/audio/
+
+# --- Editors / OS ---
+.DS_Store
+.idea/
+.vscode/
+/.opencode/
+/.logs/
+
+# --- SDD ledger (git-ignored scratch, never committed) ---
+/.superpowers/

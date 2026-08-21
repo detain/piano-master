@@ -1,0 +1,7 @@
+<resources>
+    <!-- TODO(design-system): replace these placeholders with the KeyQuest palette
+         (plan §2 product vision / design-system ADR) and wire them into a Compose
+         ColorScheme in the theme layer. -->
+    <color name="keyquest_primary">#3F51B5</color>
+    <color name="keyquest_accent">#FF4081</color>
+</resources>

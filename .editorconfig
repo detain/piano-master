@@ -1,0 +1,41 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# C++ (engine/)
+[*.{c,cc,cpp,cxx,h,hpp,hxx}]
+indent_style = space
+indent_size = 4
+
+# PHP (api/)
+[*.php]
+indent_style = space
+indent_size = 4
+
+# Python (pipeline/)
+[*.py]
+indent_style = space
+indent_size = 4
+
+# JS/TS (cms/)
+[*.{js,mjs,cjs,ts,jsx,tsx}]
+indent_style = space
+indent_size = 2
+
+# YAML/JSON (content/, pipeline configs)
+[*.{yaml,yml,json}]
+indent_style = space
+indent_size = 2
+
+# Markdown (docs/, READMEs)
+[*.md]
+indent_style = space
+indent_size = 2
+
+# Makefile requires tabs
+[Makefile]
+indent_style = tab

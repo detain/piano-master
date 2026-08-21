@@ -1,0 +1,249 @@
+# KeyQuest CI skeleton — plan P0.1.3.
+#
+# Five mandatory, gating jobs. A PR that breaks any workspace is red before
+# review. Total wall-clock target < 10 minutes; flakiness is fixed the day it
+# appears, not triaged (plan P0.1.3).
+#
+# Some jobs keep fallback branches for pre-scaffold trees, but on the current
+# tree every job runs its final check. See .github/workflows/README.md for the
+# current state and fallback paths of each job.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Engine host tests — C++20 core, Linux host only, no device needed.
+  # ---------------------------------------------------------------------------
+  engine-host-tests:
+    name: Engine host tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure, build, and run host tests
+        run: |
+          set -euxo pipefail
+          cd engine
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+          ctest --test-dir build --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # 2. Android unit tests — JVM tests only, no emulator.
+  #    The Gradle wrapper IS committed and pins Gradle 8.11.1; the toolchain
+  #    `gradle` fallback (installed by gradle/actions/setup-gradle) is
+  #    fallback-only for pre-scaffold trees.
+  # ---------------------------------------------------------------------------
+  android-unit:
+    name: Android unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # Provision the Android SDK for API 36 (match the app's compileSdk).
+      # TODO(P0.1.2): keep the platform level in sync with /toolchain.md.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools, platforms;android-36'
+
+      # Caches the Gradle user home (dependencies + build cache).
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests (debug)
+        run: |
+          set -euxo pipefail
+          cd android
+          if [ -x ./gradlew ]; then
+            # Wrapper is committed (gradlew + gradle/wrapper/gradle-wrapper.jar)
+            # and pins Gradle 8.11.1 — this is the branch CI actually takes.
+            ./gradlew testDebugUnitTest --no-daemon --stacktrace
+          else
+            # Fallback-only: a tree without the committed wrapper uses the
+            # toolchain gradle. The version catalog (libs.versions.toml) still
+            # pins the dependency versions.
+            gradle testDebugUnitTest --no-daemon --stacktrace
+          fi
+        # --stacktrace emits nothing on a green run and gives a usable trace on
+        # a red one — always passing it avoids paying for a second run.
+
+  # ---------------------------------------------------------------------------
+  # 3. API tests — PHPUnit + MySQL + Dragonfly service containers.
+  # ---------------------------------------------------------------------------
+  api-tests:
+    name: API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0.43
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: keyquest_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      dragonfly:
+        # Pinned image tag per plan §13.5 (Dragonfly compatibility fence);
+        # matches /toolchain.md. Pull from GHCR (ghcr.io/dragonflydb/dragonfly):
+        # the Docker Hub repo only carries stale tags and 404s on current ones.
+        image: ghcr.io/dragonflydb/dragonfly:v1.29.0
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pdo_mysql, redis, mbstring, json
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          cd api
+          composer install --no-interaction --prefer-dist
+
+      - name: Run test suite
+        run: |
+          set -euxo pipefail
+          cd api
+          if [ -f phpunit.xml.dist ]; then
+            vendor/bin/phpunit --configuration phpunit.xml.dist
+          else
+            # Fallback-only: a tree without phpunit.xml.dist validates
+            # composer.json instead. The real PHPUnit suite (Webman +
+            # Dragonfly) lands with the P0.6 spike and replaces the smoke test.
+            composer validate --no-check-publish
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 4. CMS build — Vue 3 + Vite + TypeScript production build.
+  # ---------------------------------------------------------------------------
+  cms-build:
+    name: CMS build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          # npm caching only activates once package-lock.json is committed;
+          # the hashFiles guard disables it on the fallback path so the step
+          # cannot fail on a missing lockfile.
+          cache: ${{ hashFiles('cms/package-lock.json') != '' && 'npm' || '' }}
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          cd cms
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            # Fallback-only: a tree without the lockfile falls back to a plain
+            # install. package-lock.json is committed, so npm ci is what runs.
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Build
+        run: |
+          set -euxo pipefail
+          cd cms
+          npm run build
+
+      - name: Run lint
+        run: |
+          set -euxo pipefail
+          cd cms
+          npm run lint
+
+  # ---------------------------------------------------------------------------
+  # 5. Cross-workspace lint greps — plan §13.4.2 Webman state-hygiene rules.
+  #    These run from day one, before there is code to violate them (P2.A1).
+  # ---------------------------------------------------------------------------
+  lint-all:
+    name: Lint all workspaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP syntax check
+        run: |
+          set -euxo pipefail
+          find api -name '*.php' -not -path '*/vendor/*' -print0 \
+            | xargs -0 -r -n1 php -l
+
+      - name: Forbid exit()/die() outside start.php
+        run: |
+          set -euxo pipefail
+          # exit()/die() kills the Workerman worker, not the request (§13.4.2).
+          # start.php lives outside the scanned dirs, so bootstrap exits are
+          # allowed there.
+          if grep -rnE 'exit\s*\(|\bdie\s*\(' api/app api/config api/support; then
+            echo "::error::exit()/die() found in api/app, api/config, api/support — return a response object instead (§13.4.2)." >&2
+            exit 1
+          fi
+
+      - name: Forbid superglobal reads in app and config
+        run: |
+          set -euxo pipefail
+          # Superglobals are not populated per request in long-lived workers;
+          # use $request->get()/post()/header()/session() (§13.4.2).
+          if grep -rnE '\$_(GET|POST|SERVER|SESSION|REQUEST|COOKIE|FILES|ENV)' api/app api/config; then
+            echo "::error::superglobal read found in api/app or api/config — use the \$request object (§13.4.2)." >&2
+            exit 1
+          fi
+
+      - name: Python compile check
+        run: |
+          set -euxo pipefail
+          files=$(find pipeline -name '*.py' -not -path '*/__pycache__/*')
+          if [ -n "$files" ]; then
+            python -m py_compile $files
+          fi
+
+      - name: Trailing whitespace check
+        run: |
+          set -euxo pipefail
+          # Cheap, deterministic .editorconfig stand-in (no npx downloads).
+          if grep -rn '[[:blank:]]$' \
+            engine android api cms pipeline \
+            --include='*.cpp' --include='*.h' \
+            --include='*.kt' --include='*.kts' \
+            --include='*.php' --include='*.py' \
+            --include='*.ts' --include='*.tsx' --include='*.vue' \
+            --include='*.json' --include='*.yml' --include='*.yaml' \
+            --exclude-dir=vendor --exclude-dir=node_modules \
+            --exclude-dir=build --exclude-dir=.gradle \
+            --exclude-dir=dist --exclude-dir=__pycache__; then
+            echo "::error::trailing whitespace found — remove it (editorconfig sanity, plan P0.1.3)." >&2
+            exit 1
+          fi

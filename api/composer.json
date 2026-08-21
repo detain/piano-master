@@ -1,0 +1,34 @@
+{
+    "name": "keyquest/api",
+    "type": "project",
+    "description": "KeyQuest REST API — Webman 2.1 on Workerman 5.1, MySQL 8, Dragonfly (Redis-compatible). Plan §3.3 and §13.",
+    "keywords": ["keyquest", "webman", "workerman", "api"],
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.3",
+        "guzzlehttp/guzzle": "^7.8",
+        "lcobucci/jwt": "^5.0",
+        "psr/log": "^3.0",
+        "respect/validation": "^2.3",
+        "webman/database": "^1.0",
+        "webman/redis": "^1.0",
+        "webman/redis-queue": "^1.0",
+        "workerman/webman-framework": "^2.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0",
+        "symfony/var-dumper": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "support\\": "support/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
