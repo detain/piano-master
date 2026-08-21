@@ -17,7 +17,14 @@ class AuthEchoController
 {
     public function echo(Request $request): Response
     {
-        $message = trim((string) $request->post('message', '')) ?: 'echo';
+        // Parse at the boundary: Webman returns whatever JSON decoded, which
+        // can be an array (e.g. {"message":["a"]}); (string) would emit an
+        // "Array to string conversion" warning and surface as an opaque 500.
+        $message = $request->post('message', '');
+        if (!is_string($message)) {
+            return json(['error' => 'message must be a string'])->withStatus(422);
+        }
+        $message = trim($message) ?: 'echo';
 
         // Fail fast: the column is VARCHAR(255); reject instead of truncating.
         if (mb_strlen($message) > 255) {

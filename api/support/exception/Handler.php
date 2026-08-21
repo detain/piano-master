@@ -21,7 +21,10 @@ class Handler extends ExceptionHandler
 
         $payload = [
             'error' => [
-                'code' => $exception->getCode() ?: $status,
+                // Always reflect the resolved HTTP status: an exception code
+                // can be a non-HTTP value (PDOException SQLSTATE, domain code)
+                // and must not leak into the body or HTTP layer.
+                'code' => $status,
                 'message' => $this->debug ? $exception->getMessage() : 'Internal server error',
             ],
         ];

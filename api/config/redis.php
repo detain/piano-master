@@ -9,8 +9,9 @@
  *
  * The client is phpredis ('redis' ext is installed locally, toolchain.md).
  * 'timeout' / 'read_timeout' bound the connect/read path so /readyz fails
- * fast instead of hanging (plan §13.6). Per-connection 'pool' config is read
- * by Webman\Redis\RedisManager.
+ * fast instead of hanging (plan §13.6). The pool block must live under the
+ * 'default' connection: Webman\Redis\RedisManager::connection() reads it as
+ * $this->config[$name]['pool'] — a top-level 'pool' key is silently ignored.
  *
  * Env overrides use getenv() ONLY — never the superglobal env/server arrays
  * (plan §13.4.2).
@@ -31,13 +32,13 @@ return [
         'read_timeout' => 2.0,
         'persistent' => false,
         'prefix' => '',
+        'pool' => [
+            'max_connections' => 10,
+            'min_connections' => 0,
+            'wait_timeout' => 3,
+            'idle_timeout' => 60,
+            'heartbeat_interval' => 50,
+        ],
     ],
     'options' => [],
-    'pool' => [
-        'max_connections' => 10,
-        'min_connections' => 0,
-        'wait_timeout' => 3,
-        'idle_timeout' => 60,
-        'heartbeat_interval' => 50,
-    ],
 ];

@@ -22,7 +22,7 @@ final class SkeletonRoutesTest extends TestCase
 {
     private const SKIP_MESSAGE = 'MySQL/Dragonfly not reachable — start services with `docker compose up -d` in api/ (see api/docker/README.md).';
 
-    private const BOOT_TIMEOUT_SECONDS = 20;
+    private const BOOT_TIMEOUT_SECONDS = 30;
 
     private static mixed $serverProcess = null;
     private static string $serverLogFile = '';
@@ -74,6 +74,21 @@ final class SkeletonRoutesTest extends TestCase
                 break;
             }
             usleep(100_000);
+        }
+
+        // SIGTERM is cooperative — a lingering Workerman master can keep
+        // proc_close() blocked. Escalate to SIGKILL so teardown always returns.
+        $status = proc_get_status(self::$serverProcess);
+        if ($status['running']) {
+            proc_terminate(self::$serverProcess, 9);
+            $killDeadline = microtime(true) + 2;
+            while (microtime(true) < $killDeadline) {
+                $status = proc_get_status(self::$serverProcess);
+                if (!$status['running']) {
+                    break;
+                }
+                usleep(100_000);
+            }
         }
         proc_close(self::$serverProcess);
         self::$serverProcess = null;
@@ -239,7 +254,10 @@ final class SkeletonRoutesTest extends TestCase
     }
 
     /**
-     * Poll GET /healthz until the child serves HTTP or the boot deadline hits.
+     * Poll GET /readyz (expect 200) until the child serves HTTP or the boot
+     * deadline hits. /readyz is preferred over /healthz so a fresh
+     * `docker compose up` with mysql-init still running makes us wait instead
+     * of failing on a port-open-but-not-ready window.
      */
     private static function waitForServer(): void
     {
@@ -259,7 +277,7 @@ final class SkeletonRoutesTest extends TestCase
                 );
             }
             try {
-                if ($client->get('/healthz')->getStatusCode() === 200) {
+                if ($client->get('/readyz')->getStatusCode() === 200) {
                     return;
                 }
             } catch (Throwable) {

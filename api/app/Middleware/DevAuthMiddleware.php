@@ -24,7 +24,9 @@ class DevAuthMiddleware implements MiddlewareInterface
     {
         $authorization = $request->header('authorization', '');
 
-        if (!is_string($authorization) || !str_starts_with($authorization, self::BEARER_PREFIX)) {
+        // RFC 7235: auth schemes are case-insensitive, so accept `bearer` too.
+        // P2.A2's real JWT middleware must keep this behavior.
+        if (!is_string($authorization) || stripos($authorization, self::BEARER_PREFIX) !== 0) {
             return $this->unauthorized();
         }
 
