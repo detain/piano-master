@@ -8,11 +8,14 @@
 
 // Textbook YIN (de Cheveigne & Kawahara 2002) with a pYIN-style tau
 // refinement. The detector only searches periods inside [minFreq, maxFreq],
-// and returns pitch == -1 for silence (RMS below the floor) or degenerate
-// windows so callers never see a confident pitch for unpitched audio.
+// and returns pitch == -1 for silence (RMS below the floor), constant/flat
+// signals, below-range periods, or degenerate windows so callers never see a
+// confident pitch for unpitched audio.
 //
 // Not thread-safe: YinStream owns a mutable overlap buffer and must be used
 // from a single worker thread.
+
+namespace engine::dsp {
 
 namespace {
 
@@ -125,6 +128,21 @@ PitchResult detectPitchInWindow(const float* window, std::size_t n,
         }
     }
 
+    // DC/constant-signal guard: when every normalized difference sits at its
+    // maximum (1.0) the window is flat — report silence rather than a phantom
+    // pitch. (A threshold hit always has d' < threshold < 1.0, so this only
+    // fires on the degenerate argmin path.)
+    if (dPrime[tau0] >= 1.0) {
+        return silenceResult();
+    }
+
+    // Boundary honesty: a pick pinned to maxTau means the true period lies at
+    // or beyond the low-frequency search boundary — report below-range rather
+    // than a confident-but-wrong pitch.
+    if (tau0 == maxTau) {
+        return silenceResult();
+    }
+
     // 4) Parabolic interpolation around the integer candidate.
     double tauInterp = 0.0;
     double costAtTau = 0.0;
@@ -200,13 +218,18 @@ std::optional<PitchResult> YinStream::process(const float* samples,
     if (n == 0) {
         return std::nullopt;
     }
+    if (samples == nullptr) {
+        throw std::invalid_argument(
+            "YinStream::process: samples must not be null when n > 0");
+    }
 
     overlap_.insert(overlap_.end(), samples, samples + n);
 
     std::optional<PitchResult> lastResult;
     while (overlap_.size() >= cfg_.windowSize) {
-        lastResult = yinDetect(overlap_.data(), cfg_.windowSize,
-                               cfg_.sampleRate, cfg_.threshold);
+        lastResult = detectPitchInWindow(overlap_.data(), cfg_.windowSize,
+                                         cfg_.sampleRate, cfg_.threshold,
+                                         cfg_.minFreq, cfg_.maxFreq);
         // Advance by one hop: keep only the tail the next window overlaps.
         const std::size_t consumed = cfg_.hopSize;
         overlap_.erase(overlap_.begin(),
@@ -223,8 +246,11 @@ std::optional<PitchResult> YinStream::finish() {
     // Pad the remaining partial window with zeros so the final detection
     // covers a full window.
     overlap_.resize(cfg_.windowSize, 0.0f);
-    const PitchResult result = yinDetect(overlap_.data(), cfg_.windowSize,
-                                         cfg_.sampleRate, cfg_.threshold);
+    const PitchResult result = detectPitchInWindow(
+        overlap_.data(), cfg_.windowSize, cfg_.sampleRate, cfg_.threshold,
+        cfg_.minFreq, cfg_.maxFreq);
     overlap_.clear();
     return result;
 }
+
+}  // namespace engine::dsp

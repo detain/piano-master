@@ -27,7 +27,8 @@ bool runYinSmokeCheck() {
         sine[i] = static_cast<float>(std::sin(phase));
     }
 
-    const PitchResult result = yinDetect(sine.data(), kWindowSize, kSampleRate);
+    const engine::dsp::PitchResult result =
+        engine::dsp::yinDetect(sine.data(), kWindowSize, kSampleRate);
     if (result.pitch != 69 || result.confidence <= 0.8) {
         std::fprintf(stderr,
                      "yinDetect smoke: expected pitch 69 confidence > 0.8, "
