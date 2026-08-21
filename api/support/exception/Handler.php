@@ -33,15 +33,19 @@ class Handler extends ExceptionHandler
     }
 
     /**
-     * Use the exception code when it is a plausible HTTP status (4xx/5xx),
-     * otherwise fall back to 500. Fail loud: never mask a 5xx as 200.
+     * Use the exception code when it is a real int in the 4xx/5xx range,
+     * otherwise fall back to 500. The code is type-checked first: PDO/
+     * Illuminate exceptions can surface a string SQLSTATE (e.g. "42S02"),
+     * which PHP 8 would otherwise compare true against 400..599 and then
+     * cast to 42 — an invalid HTTP status that Webman would write verbatim.
+     * Fail loud: never mask a 5xx as 200.
      */
     private function resolveStatus(Throwable $exception): int
     {
         $code = $exception->getCode();
 
-        if ($code >= 400 && $code <= 599) {
-            return (int) $code;
+        if (is_int($code) && $code >= 400 && $code <= 599) {
+            return $code;
         }
 
         return 500;

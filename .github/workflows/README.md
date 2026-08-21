@@ -48,12 +48,14 @@ is committed and pins Gradle 8.11.1; the job runs
 toolchain-gradle fallback). The version catalog (`libs.versions.toml`) pins
 dependency versions.
 
-Setup: temurin JDK 21 (`actions/setup-java@v4`, `cache: gradle`), Android SDK
+Setup: temurin JDK 21 (`actions/setup-java@v5`, `cache: gradle`), Android SDK
 via `android-actions/setup-android@v3` with packages
-`platform-tools,platforms;android-36` (comma-separated, no spaces — the action
-splits on whitespace, so a comma+space would be parsed as a package literally
-named `platform-tools,`; keep the API level in sync with `/toolchain.md`,
-P0.1.2), and Gradle user-home caching via `gradle/actions/setup-gradle@v4`.
+`platform-tools platforms;android-36` (space-separated — the action splits
+`packages` on spaces and passes each token to sdkmanager as one package;
+commas are NOT separators, so `platform-tools,platforms;android-36` would be
+installed as a single bogus package; keep the API level in sync with
+`/toolchain.md`, P0.1.2), and Gradle user-home caching via
+`gradle/actions/setup-gradle@v4`.
 `--stacktrace` is always passed: silent on green, gives a usable trace on red
 without a costly second run.
 
@@ -63,7 +65,10 @@ Gates the Webman 2.1 backend against real service containers:
 
 - `mysql:8.0.43` — `MYSQL_ALLOW_EMPTY_PASSWORD=yes`, database `keyquest_test`,
   health-checked via `mysqladmin ping` (10s interval / 5s timeout / 10 retries),
-  port 3306.
+  port 3306. The repo's `api/docker/mysql-init` is mounted read-only into
+  `/docker-entrypoint-initdb.d` so the CI container gets the same schema
+  (`skeleton_echo` and friends) as the local stack — without it
+  `POST /auth/echo` fails with SQLSTATE 42S02.
 - `ghcr.io/dragonflydb/dragonfly:v1.29.0` — pinned per plan §13.5 (Dragonfly
   compatibility fence); matches `/toolchain.md`.
 

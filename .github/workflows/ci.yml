@@ -12,7 +12,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Default branch is `master`; `main` kept as a belt-and-braces alias.
+    branches: [master, main]
   pull_request:
   workflow_dispatch:
 
@@ -54,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -62,9 +63,12 @@ jobs:
 
       # Provision the Android SDK for API 36 (match the app's compileSdk).
       # TODO(P0.1.2): keep the platform level in sync with /toolchain.md.
+      # NOTE: setup-android@v3 splits `packages` on SPACES (verified in action
+      # source: getInput("packages").split(" ")), not commas — each token is
+      # passed to sdkmanager as one package.
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools,platforms;android-36'
+          packages: 'platform-tools platforms;android-36'
 
       # Caches the Gradle user home (dependencies + build cache).
       - uses: gradle/actions/setup-gradle@v4
@@ -99,6 +103,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+          --volume="${{ github.workspace }}/api/docker/mysql-init:/docker-entrypoint-initdb.d:ro"
       dragonfly:
         # Pinned image tag per plan §13.5 (Dragonfly compatibility fence);
         # matches /toolchain.md. Pull from GHCR (ghcr.io/dragonflydb/dragonfly):
