@@ -32,9 +32,25 @@ use Throwable;
  *       WebmanTestHarness::shutdown();
  *   }
  *
+ * Tests that need the child to run with extra env (e.g. the Redis recording
+ * seam in RedisCommandSurfaceGuardTest) pass them to boot():
+ *
+ *   WebmanTestHarness::boot(['KQ_TEST_RECORD_REDIS' => '1', ...]);
+ *
  * State: one static boot slot — the PHPUnit runner executes classes
  * sequentially, so boot() in setUpBeforeClass + shutdown() in
  * tearDownAfterClass never overlaps.
+ *
+ * Teardown limitation: the child is NOT its own process group (proc_open has
+ * no setpgid), so a process-group kill (-pid) would signal OUR OWN group and
+ * is never attempted. After SIGKILL on the master we best-effort SIGKILL the
+ * enumerated worker grandchildren first, then the master — an orphaned worker
+ * whose master died is only possible if the master is stuck (SIGKILL cannot
+ * be blocked), which the wait-for-exit deadline guards against.
+ *
+ * §13.7 isolation note (P0.6): the plan's per-class SELECT db-index +
+ * transactional MySQL rollback are deferred to P2; the suite isolates via
+ * unique key prefixes instead (kq:... keys, {redis-queue}-surf-* queues).
  */
 final class WebmanTestHarness
 {
@@ -52,16 +68,19 @@ final class WebmanTestHarness
     /**
      * Boot the child Webman worker and wait until GET /readyz is 200.
      *
+     * @param array<string, string> $extraEnv env vars to add/override for the
+     *                                       child process (test seams).
+     *
      * @throws RuntimeException when the child dies during boot or the boot
      *                          deadline expires (log path is in the message).
      */
-    public static function boot(): void
+    public static function boot(array $extraEnv = []): void
     {
         $port = self::findFreePort();
         self::$baseUrl = 'http://127.0.0.1:' . $port;
         self::$logFile = sys_get_temp_dir() . '/kq-integration-' . getmypid() . '.log';
 
-        $env = getenv();
+        $env = array_merge(getenv(), $extraEnv);
         $env['WEBMAN_LISTEN'] = 'http://127.0.0.1:' . $port;
         $env['DEV_API_TOKEN'] = 'dev-token';
 
@@ -99,6 +118,14 @@ final class WebmanTestHarness
 
         $status = proc_get_status(self::$process);
         if ($status['running']) {
+            // Best-effort SIGKILL of known worker grandchildren first (they
+            // are enumerated from /proc, so they are OUR children's children),
+            // then the master. Never a -pid group kill: proc_open does not put
+            // the child in its own process group, so -pid would signal the
+            // PHPUnit process's group (see class docblock).
+            foreach (self::workerPids() as $workerPid) {
+                @posix_kill($workerPid, 9);
+            }
             proc_terminate(self::$process, 9);
             self::waitForExit(2);
         }
@@ -167,6 +194,26 @@ final class WebmanTestHarness
      */
     public static function workerRssKb(): ?int
     {
+        return self::maxWorkerFieldKb('VmRSS');
+    }
+
+    /**
+     * Max VmHWM (peak resident set, from /proc) across the worker children —
+     * the high-water mark the process touched, useful for spotting one-off
+     * spikes that steady-state VmRSS hides. Same fallback/availability rules
+     * as workerRssKb().
+     */
+    public static function workerPeakRssKb(): ?int
+    {
+        return self::maxWorkerFieldKb('VmHWM');
+    }
+
+    /**
+     * @return int|null the largest $field (VmRSS/VmHWM kB) across the worker
+     *                  children, or null when /proc is unavailable.
+     */
+    private static function maxWorkerFieldKb(string $field): ?int
+    {
         $pids = self::workerPids();
         if ($pids === []) {
             $pids = [self::$masterPid];
@@ -174,7 +221,7 @@ final class WebmanTestHarness
 
         $maxKb = null;
         foreach (array_unique($pids) as $pid) {
-            $kb = self::readVmRssKb($pid);
+            $kb = self::readVmFieldKb($pid, $field);
             if ($kb !== null) {
                 $maxKb = $maxKb === null ? $kb : max($maxKb, $kb);
             }
@@ -274,13 +321,13 @@ final class WebmanTestHarness
         return $port;
     }
 
-    private static function readVmRssKb(int $pid): ?int
+    private static function readVmFieldKb(int $pid, string $field): ?int
     {
         $status = @file_get_contents('/proc/' . $pid . '/status');
         if ($status === false) {
             return null;
         }
-        if (!preg_match('/^VmRSS:\s+(\d+) kB$/m', $status, $matches)) {
+        if (!preg_match('/^' . preg_quote($field, '/') . ':\s+(\d+) kB$/m', $status, $matches)) {
             return null;
         }
 

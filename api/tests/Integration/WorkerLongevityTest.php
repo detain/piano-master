@@ -52,6 +52,8 @@ final class WorkerLongevityTest extends TestCase
     private const MAX_RSS_GROWTH_KB = 20 * 1024; // < 20 MB CI-safe; plan target 5 MB
     private const ROUTES = ['/', '/healthz', '/readyz', '/db/version', '/cache/now'];
 
+    private static string $summaryPath = '';
+
     public static function setUpBeforeClass(): void
     {
         if (!WebmanTestHarness::dependenciesReachable()) {
@@ -62,6 +64,12 @@ final class WorkerLongevityTest extends TestCase
         }
 
         WebmanTestHarness::boot();
+
+        self::$summaryPath = tempnam(sys_get_temp_dir(), 'kq-longevity-summary-') ?: '';
+        if (self::$summaryPath === '') {
+            throw new \RuntimeException('failed to reserve a summary file');
+        }
+        fwrite(STDERR, "longevity-summary-path: " . self::$summaryPath . "\n");
     }
 
     public static function tearDownAfterClass(): void
@@ -93,8 +101,10 @@ final class WorkerLongevityTest extends TestCase
         $this->fire($client, self::TOTAL_REQUESTS, $mismatches);
 
         $rssAfterKb = WebmanTestHarness::workerRssKb();
+        self::assertNotNull($rssAfterKb, 'worker RSS after the run must be readable via /proc');
+        $rssPeakKb = WebmanTestHarness::workerPeakRssKb();
         $elapsedSeconds = microtime(true) - $startedAt;
-        $growthKb = ($rssAfterKb ?? 0) - $rssBeforeKb;
+        $growthKb = $rssAfterKb - $rssBeforeKb;
         $workerAlive = WebmanTestHarness::isRunning();
 
         $this->writeSummary([
@@ -103,6 +113,7 @@ final class WorkerLongevityTest extends TestCase
             'bleed_mismatches' => count($mismatches),
             'rss_before_kb' => $rssBeforeKb,
             'rss_after_kb' => $rssAfterKb,
+            'rss_peak_kb' => $rssPeakKb, // VmHWM high-water mark, informational
             'rss_growth_kb' => $growthKb,
             'elapsed_seconds' => round($elapsedSeconds, 2),
             'worker_alive' => $workerAlive,
@@ -170,14 +181,15 @@ final class WorkerLongevityTest extends TestCase
     /**
      * Write measured numbers where the verification step can read them —
      * PHPUnit hides passing-test stdout, and the report needs the RSS delta
-     * and request count.
+     * and request count. Per-run tempnam path (printed to STDERR as
+     * "longevity-summary-path:") so parallel runs never clobber each other.
      *
      * @param array<string, mixed> $summary
      */
     private function writeSummary(array $summary): void
     {
         $encoded = json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        file_put_contents(sys_get_temp_dir() . '/kq-longevity-summary.json', $encoded . "\n");
+        file_put_contents(self::$summaryPath, $encoded . "\n");
         fwrite(STDERR, "longevity-summary: " . $encoded . "\n");
     }
 }

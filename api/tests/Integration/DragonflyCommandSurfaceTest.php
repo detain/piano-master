@@ -34,17 +34,19 @@ use Tests\Support\RedisCommandRecorder;
  * must not call phpredis object()/copy() against Dragonfly.
  *
  * SKIP gate: Dragonfly unreachable => whole class skipped (never fails).
- * Summary numbers land in /tmp/kq-dragonfly-surface-summary.json for the
- * report.
+ * Summary numbers land in a per-run tempnam file (path printed to STDERR as
+ * "dragonfly-surface-summary-path:") for the report.
+ *
+ * The command surface is only half the §13.5 story: RedisCommandSurfaceGuardTest
+ * records what the app's REAL request path issues through the seam and asserts
+ * it stays inside this pinned list. The manual P0.6.3 soak + P0.6.4
+ * restart-mid-consume drill procedures live in SoakDrill.md (same directory).
  */
 final class DragonflyCommandSurfaceTest extends TestCase
 {
     private const SKIP_MESSAGE = 'Dragonfly not reachable on 127.0.0.1:6379 — start services with `docker compose up -d` in api/ (see api/docker/README.md).';
 
     private const SURFACE_FILE = __DIR__ . '/../Support/dragonfly_command_surface.php';
-    private const SUMMARY_FILE = '/tmp/kq-dragonfly-surface-summary.json';
-
-    private const MIN_COMMANDS = 80; // guard against accidental surface trimming
 
     private const EVALSHA_PLACEHOLDER = '__SHA1_RETURN_ARGV1__';
 
@@ -56,7 +58,11 @@ final class DragonflyCommandSurfaceTest extends TestCase
             self::markTestSkipped(self::SKIP_MESSAGE);
         }
 
-        self::$summaryPath = sys_get_temp_dir() . '/kq-dragonfly-surface-summary.json';
+        self::$summaryPath = tempnam(sys_get_temp_dir(), 'kq-dragonfly-surface-summary-') ?: '';
+        if (self::$summaryPath === '') {
+            throw new RuntimeException('failed to reserve a summary file');
+        }
+        fwrite(STDERR, "dragonfly-surface-summary-path: " . self::$summaryPath . "\n");
     }
 
     public function testPinnedCommandSurfaceReturnsNoErrorReplies(): void
@@ -98,14 +104,18 @@ final class DragonflyCommandSurfaceTest extends TestCase
             'command_count' => count($surface['commands']),
             'seed_errors' => count($seedFailures),
             'command_errors' => count($commandFailures),
-            'min_commands' => self::MIN_COMMANDS,
+            'pinned_command_entry_count' => $surface['meta']['pinned_command_entry_count'],
             'findings' => $surface['findings'],
         ]);
 
+        // No magic floor: the pinned entry count lives in the surface file's
+        // meta block (single source of truth) and must be bumped when the
+        // surface legitimately grows. Dropping entries below it means the
+        // replay silently covers less than what was verified.
         self::assertGreaterThanOrEqual(
-            self::MIN_COMMANDS,
+            $surface['meta']['pinned_command_entry_count'],
             count($surface['commands']),
-            'command surface must not shrink below the pinned count'
+            'command surface must not shrink below the pinned entry count'
         );
         self::assertSame([], $seedFailures, 'seed commands must not error');
         self::assertSame([], $commandFailures, 'every pinned command must reply without an error');
@@ -160,9 +170,14 @@ final class DragonflyCommandSurfaceTest extends TestCase
         $redis = self::connect();
         $channel = 'kq:surf:chan-rt';
 
+        // Honor REDIS_HOST/REDIS_PORT like every other connection in the
+        // suite (defaults match the docker compose bindings).
+        $childHost = getenv('REDIS_HOST') ?: '127.0.0.1';
+        $childPort = (int) (getenv('REDIS_PORT') ?: 6379);
+
         $childScript = <<<'PHP'
 $r = new Redis();
-$r->connect('127.0.0.1', 6379, 2);
+$r->connect('HOST_PLACEHOLDER', PORT_PLACEHOLDER, 2);
 $r->setOption(Redis::OPT_READ_TIMEOUT, 5);
 $received = null;
 try {
@@ -175,7 +190,13 @@ try {
 }
 echo json_encode($received), PHP_EOL;
 PHP;
-        $childScript = str_replace('CHANNEL_PLACEHOLDER', $channel, $childScript);
+        // Replace the QUOTED host placeholder (var_export adds its own
+        // quotes); the port placeholder is a bare literal.
+        $childScript = str_replace(
+            ["'HOST_PLACEHOLDER'", 'PORT_PLACEHOLDER', 'CHANNEL_PLACEHOLDER'],
+            [var_export($childHost, true), (string) $childPort, $channel],
+            $childScript
+        );
 
         $child = proc_open(
             [PHP_BINARY, '-r', $childScript],

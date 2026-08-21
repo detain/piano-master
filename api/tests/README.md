@@ -15,13 +15,16 @@ catches the Webman-specific failure modes nothing else will.
    Guzzle. Requires MySQL and Dragonfly up (`docker compose up -d` in api/);
    every class SKIPS (never fails) when the services are unreachable so CI
    without containers stays green. `SkeletonRoutesTest` covers the P0.6.1
-   route surface; `WorkerLongevityTest` is the §13.7 do-not-skip suite.
+   route surface; `WorkerLongevityTest` is the §13.7 do-not-skip suite;
+   `RedisCommandSurfaceGuardTest` proves the app's real Redis usage stays
+   inside the pinned Dragonfly surface.
 
 3. **Worker-longevity suite (do not skip)** — `tests/Integration/
    WorkerLongevityTest.php` boots ONE worker and fires 10 000 requests through
    it (Guzzle concurrency 8) across mixed routes, then asserts (a) RSS growth
    < 20 MB after warmup — plan target is 5 MB, the measured delta is reported
-   in `/tmp/kq-longevity-summary.json`, (b) zero cross-request data bleed
+   in a per-run tempnam summary (path printed to stderr as
+   `longevity-summary-path:`), (b) zero cross-request data bleed
    (each request sends a unique `X-Request-Id`; the response MUST echo the
    same id back — a mismatch means request N's state leaked into request
    N+1), (c) the worker is still alive. This is the test that catches §13.4.2
@@ -50,8 +53,20 @@ catches the Webman-specific failure modes nothing else will.
    Dragonfly container and fails on any error reply, so the verified surface
    can't silently grow. It also probes the §13.5 fence: `FUNCTION LOAD`/
    `FCALL` and `CLIENT TRACKING` (ON/BCAST/PREFIX/REDIRECT/OFF) MUST fail
-   gracefully. Command count + fence rejections land in
-   `/tmp/kq-dragonfly-surface-summary.json`.
+   gracefully. Command count + fence rejections land in a per-run tempnam
+   summary (path printed to stderr as `dragonfly-surface-summary-path:`).
+
+6. **Redis command-surface guard (app path)** — `tests/Integration/
+   RedisCommandSurfaceGuardTest.php` wires the recorder INTO the app (the
+   §13.5 "can't silently grow" enforcement point the surface replay alone
+   cannot provide): it boots the real Webman child with the
+   `RedisRecordBootstrap` seam (registered in `config/bootstrap.php`, inert
+   unless `KQ_TEST_RECORD_REDIS` is set), which wraps every pooled redis
+   connection in a `RedisCommandRecorder` and issues one redis-queue producer
+   round through the vendored client. The test then exercises `GET /cache/now`
+   (miss + hit), shuts the child down, and asserts the recorded commands
+   (GET/SET/PING/LPUSH/ZADD) are a SUBSET of the pinned surface. Any future
+   route that calls an unpinned command fails here loudly.
 
 6. **RTDN simulator** — replays recorded Google Play Pub/Sub payloads for
    every subscription transition, including out-of-order and duplicate
@@ -103,11 +118,36 @@ The pinned list the recorder guards against lives in
 `tests/Support/dragonfly_command_surface.php` — the single source of truth
 for what the app may issue against Dragonfly (pinned image tag v1.29.0).
 
+To record the app's REAL request path (not just a hand-written connection),
+boot the Webman child with the seam enabled — `RedisCommandSurfaceGuardTest`
+does exactly this:
+
+```php
+WebmanTestHarness::boot([
+    'KQ_TEST_RECORD_REDIS' => '1',
+    'KQ_TEST_REDIS_TRACE_FILE' => $traceFile,
+    'KQ_TEST_REDIS_QUEUE_PRODUCE' => '1', // optional redis-queue producer round
+]);
+```
+
+The seam (`support/RedisRecordBootstrap.php`, registered in
+`config/bootstrap.php`) replaces the webman/redis pool's connection creator
+so EVERY pooled connection is recorder-wrapped, then flushes the merged trace
+to `KQ_TEST_REDIS_TRACE_FILE` when the worker stops. It is inert in
+production (early return when the env var is unset).
+
 ## Conventions
 
 - Unit tests live next to their service under `tests/unit/` mirroring
   `app/service/`.
-- `phpunit.xml.dist` at the repo root configures the `unit` + `integration`
-  suites; CI runs them all with the container stack.
+- `api/phpunit.xml.dist` configures the `unit` + `integration` suites; CI
+  runs them all with the container stack.
+- **§13.7 isolation note (P0.6):** the plan's per-class Dragonfly db index via
+  `SELECT` + transactional MySQL rollback are DEFERRED to P2. The current
+  suite isolates with unique key prefixes instead (`kq:...` keys,
+  `{redis-queue}-surf-*` test queues) and cleans up after itself — do not
+  introduce shared mutable test keys.
 - Anything touching money, entitlements, or published content must be tested
   through the `job_outbox` path (§13.4.5), not a direct queue push.
+- Manual P0.6.3 soak + P0.6.4 Dragonfly-restart drill procedures: see
+  `tests/Integration/SoakDrill.md`.

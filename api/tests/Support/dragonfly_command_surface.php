@@ -37,6 +37,11 @@ return [
     'meta' => [
         'pinned_dragonfly_version' => 'v1.29.0',
         'verified_on' => '2026-08-21',
+        // Replay floor used by DragonflyCommandSurfaceTest: entries in
+        // 'commands' must never drop below this count. Bump it when the
+        // surface legitimately grows (it is the source of truth, not a magic
+        // number in the test class).
+        'pinned_command_entry_count' => 89,
         'provenance' => [
             'app' => 'app/Controller/CacheController.php (GET/SET EX NX), app/Controller/HealthController.php (PING), webman/redis connection setup (CONNECT/SELECT)',
             'queue' => 'vendor/webman/redis-queue/src/RedisConnection.php (PING heartbeat, ZADD/LPUSH), vendor/workerman/redis-queue/src/Client.php (LPUSH/ZADD/BRPOP/ZREVRANGEBYSCORE/ZREM/RPUSH, AUTH/SELECT at connect)',

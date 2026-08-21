@@ -38,6 +38,22 @@ final class RedisCommandRecorder
     }
 
     /**
+     * Rehydrate a recorder from a previously captured trace (e.g. one flushed
+     * to disk by the child-process seam; see RedisCommandSurfaceGuardTest).
+     * The wrapped client is a disconnected dummy — assertions only read the
+     * recorded trace.
+     *
+     * @param list<array{command: string, args: list<mixed>}> $trace
+     */
+    public static function fromTrace(array $trace): self
+    {
+        $recorder = new self(new Redis());
+        $recorder->trace = $trace;
+
+        return $recorder;
+    }
+
+    /**
      * @return list<array{command: string, args: list<mixed>}>
      */
     public function trace(): array

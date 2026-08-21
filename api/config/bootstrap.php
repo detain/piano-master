@@ -7,6 +7,12 @@
  * require_once'd by support\Db / support\Model), so no entry is needed here
  * for the spike. Register long-lived listeners/daemons here ONLY — never in
  * request handling (§13.4.2).
+ *
+ * Test seam: support\RedisRecordBootstrap is inert unless the integration
+ * suite sets KQ_TEST_RECORD_REDIS=1 (RedisCommandSurfaceGuardTest); in
+ * production this entry is a no-op.
  */
 
-return [];
+return [
+    \support\RedisRecordBootstrap::class,
+];
