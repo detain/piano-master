@@ -16,9 +16,9 @@ job has a 15-minute hard timeout as a runaway guard.
 | Job | Gates | Command state |
 |-----|-------|---------------|
 | `engine-host-tests` | C++20 core builds; `engine_host_tests` passes | Final |
-| `android-unit` | Android JVM unit tests pass (no emulator) | Final (wrapper committed) |
-| `api-tests` | PHPUnit suite passes against MySQL + Dragonfly | Final (smoke test; real suite in P0.6) |
-| `cms-build` | CMS production build succeeds | Final (lockfile committed, `npm ci`) |
+| `android-unit` | Android JVM unit tests pass (no emulator) | Final |
+| `api-tests` | PHPUnit suite passes against MySQL + Dragonfly | Final |
+| `cms-build` | CMS production build succeeds | Final |
 | `lint-all` | PHP syntax + §13.4.2 state-hygiene greps + Python compile + whitespace | Final |
 
 ## Job details
@@ -42,20 +42,20 @@ carry cmake/g++. The `build/` dir is gitignored.
 Gates the Android app's JVM unit tests (`testDebugUnitTest`). No emulator, so
 no device-flake surface.
 
-- **Current:** the Gradle wrapper (`gradlew`, `gradlew.bat`,
-  `gradle/wrapper/gradle-wrapper.jar`) is committed and pins Gradle 8.11.1;
-  the job runs `./gradlew testDebugUnitTest --no-daemon --stacktrace`. The
-  version catalog (`libs.versions.toml`) pins dependency versions.
-- **Fallback-only:** the `gradle` binary branch (installed by
-  `gradle/actions/setup-gradle@v4`) remains for environments without the
-  wrapper committed; it is not taken on the current tree.
+The Gradle wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`)
+is committed and pins Gradle 8.11.1; the job runs
+`./gradlew testDebugUnitTest --no-daemon --stacktrace` directly (no
+toolchain-gradle fallback). The version catalog (`libs.versions.toml`) pins
+dependency versions.
 
 Setup: temurin JDK 21 (`actions/setup-java@v4`, `cache: gradle`), Android SDK
-via `android-actions/setup-android@v3` (`platform-tools`,
-`platforms;android-36` — keep in sync with `/toolchain.md`, P0.1.2), and Gradle
-user-home caching via `gradle/actions/setup-gradle@v4`. `--stacktrace` is
-always passed: silent on green, gives a usable trace on red without a costly
-second run.
+via `android-actions/setup-android@v3` with packages
+`platform-tools,platforms;android-36` (comma-separated, no spaces — the action
+splits on whitespace, so a comma+space would be parsed as a package literally
+named `platform-tools,`; keep the API level in sync with `/toolchain.md`,
+P0.1.2), and Gradle user-home caching via `gradle/actions/setup-gradle@v4`.
+`--stacktrace` is always passed: silent on green, gives a usable trace on red
+without a costly second run.
 
 ### 3. `api-tests` — final
 
@@ -67,13 +67,16 @@ Gates the Webman 2.1 backend against real service containers:
 - `ghcr.io/dragonflydb/dragonfly:v1.29.0` — pinned per plan §13.5 (Dragonfly
   compatibility fence); matches `/toolchain.md`.
 
-- **Current:** `phpunit.xml.dist` is committed and runs a smoke test
-  (`tests/unit/SmokeTest.php`) proving the suite is wired; it fails on an
-  empty suite (`failOnEmptyTestSuite="true"`).
-- **Fallback-only:** the `composer validate --no-check-publish` branch remains
-  for a tree without `phpunit.xml.dist`; it is not taken on the current tree.
-- **Next:** the real PHPUnit suite (Webman + Dragonfly) lands with the P0.6
-  spike and replaces the smoke test.
+- **Current:** `phpunit.xml.dist` is committed; the job runs
+  `vendor/bin/phpunit --configuration phpunit.xml.dist` directly (no
+  composer-validate fallback). It boots real Webman in a child process against
+  the MySQL + Dragonfly service containers and fails on an empty suite
+  (`failOnEmptyTestSuite="true"`).
+- **DB env:** the MySQL service container creates only `keyquest_test`, but
+  `api/config/database.php` defaults `DB_DATABASE` to `keyquest`. The
+  `Run test suite` step therefore sets `DB_DATABASE=keyquest_test`,
+  `DB_USERNAME=root`, `DB_PASSWORD=''` (root / empty password match
+  `MYSQL_ALLOW_EMPTY_PASSWORD=yes`; they also match the config defaults).
 
 PHP 8.3 via `shivammathur/setup-php@v2` with extensions `pdo`, `pdo_mysql`,
 `redis`, `mbstring`, `json` and `composer:v2`.
@@ -85,11 +88,11 @@ Gates the Vue 3 + Vite + TypeScript production build.
 - **Current:** `package-lock.json` is committed, so the job runs `npm ci`
   (reproducible and faster than install), then `npm run build` and
   `npm run lint`.
-- **Fallback-only:** the `npm install --no-audit --no-fund` branch remains for
-  a tree without the lockfile; it is not taken on the current tree.
 
-setup-node's npm cache activates automatically only when the lockfile exists
-via a `hashFiles` guard — it cannot fail the fallback path.
+setup-node is pinned to Node 24 (matches `/toolchain.md` and the
+ubuntu-24.04 runner default; avoids setup-node's Node 20 deprecation warning)
+with `cache: npm` and `cache-dependency-path: cms/package-lock.json` — the
+cache points at the committed lockfile instead of searching the repo root.
 
 ### 5. `lint-all` — final
 
@@ -120,10 +123,9 @@ fails the job:
   triaged.
 - Pinning (plan §P0.1.2): tool versions and image tags live in `/toolchain.md`;
   every place CI must follow it carries a `TODO(P0.1.2)` comment.
-- Remaining fallback branches are fallback-only for pre-scaffold trees; the
+- No degraded fallback branches remain: every job runs its final check. The
   one `TODO(P0.1.2)` left is a sync reminder (platform level vs
-  `/toolchain.md`), not a permanent gap — remove each branch/comment when the
-  real artifact lands.
+  `/toolchain.md`), not a permanent gap.
 
 ## Local verification
 

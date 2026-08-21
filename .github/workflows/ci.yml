@@ -4,9 +4,9 @@
 # review. Total wall-clock target < 10 minutes; flakiness is fixed the day it
 # appears, not triaged (plan P0.1.3).
 #
-# Some jobs keep fallback branches for pre-scaffold trees, but on the current
-# tree every job runs its final check. See .github/workflows/README.md for the
-# current state and fallback paths of each job.
+# Every job runs its final check — the degraded fallback branches were removed
+# once the real artifacts landed (Gradle wrapper, phpunit.xml.dist,
+# package-lock.json). See .github/workflows/README.md for the current state.
 
 name: CI
 
@@ -44,9 +44,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 2. Android unit tests — JVM tests only, no emulator.
-  #    The Gradle wrapper IS committed and pins Gradle 8.11.1; the toolchain
-  #    `gradle` fallback (installed by gradle/actions/setup-gradle) is
-  #    fallback-only for pre-scaffold trees.
+  #    The Gradle wrapper IS committed and pins Gradle 8.11.1; the job runs it
+  #    directly (no toolchain-gradle fallback).
   # ---------------------------------------------------------------------------
   android-unit:
     name: Android unit tests
@@ -65,7 +64,7 @@ jobs:
       # TODO(P0.1.2): keep the platform level in sync with /toolchain.md.
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools, platforms;android-36'
+          packages: 'platform-tools,platforms;android-36'
 
       # Caches the Gradle user home (dependencies + build cache).
       - uses: gradle/actions/setup-gradle@v4
@@ -74,16 +73,9 @@ jobs:
         run: |
           set -euxo pipefail
           cd android
-          if [ -x ./gradlew ]; then
-            # Wrapper is committed (gradlew + gradle/wrapper/gradle-wrapper.jar)
-            # and pins Gradle 8.11.1 — this is the branch CI actually takes.
-            ./gradlew testDebugUnitTest --no-daemon --stacktrace
-          else
-            # Fallback-only: a tree without the committed wrapper uses the
-            # toolchain gradle. The version catalog (libs.versions.toml) still
-            # pins the dependency versions.
-            gradle testDebugUnitTest --no-daemon --stacktrace
-          fi
+          # Wrapper is committed (gradlew + gradle/wrapper/gradle-wrapper.jar)
+          # and pins Gradle 8.11.1.
+          ./gradlew testDebugUnitTest --no-daemon --stacktrace
         # --stacktrace emits nothing on a green run and gives a usable trace on
         # a red one — always passing it avoids paying for a second run.
 
@@ -130,17 +122,17 @@ jobs:
           composer install --no-interaction --prefer-dist
 
       - name: Run test suite
+        # The MySQL service container creates only `keyquest_test`; point the
+        # app at it (config/database.php defaults DB_DATABASE to `keyquest`).
+        # root / empty password match MYSQL_ALLOW_EMPTY_PASSWORD=yes.
+        env:
+          DB_DATABASE: keyquest_test
+          DB_USERNAME: root
+          DB_PASSWORD: ''
         run: |
           set -euxo pipefail
           cd api
-          if [ -f phpunit.xml.dist ]; then
-            vendor/bin/phpunit --configuration phpunit.xml.dist
-          else
-            # Fallback-only: a tree without phpunit.xml.dist validates
-            # composer.json instead. The real PHPUnit suite (Webman +
-            # Dragonfly) lands with the P0.6 spike and replaces the smoke test.
-            composer validate --no-check-publish
-          fi
+          vendor/bin/phpunit --configuration phpunit.xml.dist
 
   # ---------------------------------------------------------------------------
   # 4. CMS build — Vue 3 + Vite + TypeScript production build.
@@ -152,25 +144,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pin Node 24 explicitly (matches /toolchain.md and the ubuntu-24.04
+      # runner default; avoids setup-node's Node 20 deprecation warning).
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          # npm caching only activates once package-lock.json is committed;
-          # the hashFiles guard disables it on the fallback path so the step
-          # cannot fail on a missing lockfile.
-          cache: ${{ hashFiles('cms/package-lock.json') != '' && 'npm' || '' }}
+          # package-lock.json is committed at cms/package-lock.json; point the
+          # cache at it explicitly — setup-node would otherwise search the repo
+          # root and fail with "Dependencies lock file is not found".
+          cache: npm
+          cache-dependency-path: cms/package-lock.json
 
       - name: Install dependencies
         run: |
           set -euxo pipefail
           cd cms
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            # Fallback-only: a tree without the lockfile falls back to a plain
-            # install. package-lock.json is committed, so npm ci is what runs.
-            npm install --no-audit --no-fund
-          fi
+          # package-lock.json is committed — npm ci for reproducible installs.
+          npm ci
 
       - name: Build
         run: |
