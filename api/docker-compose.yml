@@ -10,6 +10,11 @@
 #
 # Both services expose default ports on 127.0.0.1 and have healthchecks so
 # `docker compose ps` shows them healthy before the API boots.
+#
+# MySQL data lives in the named volume keyquest-mysql-data and survives
+# `docker compose down`/`up`. The mysql-init schema mount runs only on first
+# init of an EMPTY data dir; to re-run it, wipe the volume:
+#   docker compose down -v
 
 services:
   mysql:
@@ -22,6 +27,7 @@ services:
     ports:
       - "127.0.0.1:3306:3306"
     volumes:
+      - mysql-data:/var/lib/mysql
       - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     command:
       - --character-set-server=utf8mb4
@@ -44,3 +50,7 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+volumes:
+  mysql-data:
+    name: keyquest-mysql-data

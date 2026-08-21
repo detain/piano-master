@@ -60,3 +60,31 @@ be rebuilt from MySQL or the CDN (plan §4).
 
 Pinned toolchain versions: [`toolchain.md`](toolchain.md). Workspace-independent
 conventions live in `.editorconfig` and `.gitignore`.
+
+## Provisioning a new machine / server
+
+Fresh Ubuntu 24.04 (or Debian 12+) server? Bootstrap the whole dev environment
+from the repo root with one command (idempotent — safe to re-run):
+
+```bash
+./scripts/provision-server.sh
+```
+
+That installs the pinned toolchain (see [`toolchain.md`](toolchain.md)):
+system packages (git, curl, build-essential, cmake, ninja, ffmpeg, python3,
+OpenJDK 21, PHP 8.3 + Composer, Docker + compose plugin), Node 24 via
+NodeSource; enables/starts Docker and adds your user to the `docker` group —
+then runs `make bootstrap` (api composer deps, cms npm deps, pipeline venv,
+engine CMake configure).
+
+Flags:
+
+- `--check` — read-only report of installed versions vs `toolchain.md` pins.
+- `--skip-system` — skip OS-level installs; only run `make bootstrap`.
+- `--with-android` — also install the Android SDK (cmdline-tools, platform 36,
+  build-tools 36.0.0, NDK r27d) and accept its licenses.
+- `--skip-android` — override `--with-android` (Android is **off** by default).
+
+What it does **not** install by default: the Android SDK — SDK licenses require
+your acceptance, so pass `--with-android` explicitly. Docker group membership
+takes effect after re-login or `newgrp docker`.

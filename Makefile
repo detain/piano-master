@@ -4,6 +4,7 @@
 #   make bootstrap   install every workspace's dependencies, print per-workspace status
 #   make test        run each workspace's checks (ctest / gradle unit tests / phpunit / cms build / py_compile)
 #   make lint        run the lint-all CI checks (php -l, py_compile, plan §13.4.2 greps)
+#   make provision   install the full server toolchain (scripts/provision-server.sh; needs sudo)
 #
 # Workspaces that are not yet present are skipped with a status line, so this
 # Makefile works on a fresh clone before every workspace has been scaffolded.
@@ -14,7 +15,7 @@ SHELL := /bin/bash
 # standard SDK-manager path; override with `make ANDROID_HOME=/path`.
 ANDROID_HOME ?= $${HOME}/Android/Sdk
 
-.PHONY: bootstrap test lint
+.PHONY: bootstrap test lint provision
 
 bootstrap:
 	@set -e; \
@@ -157,3 +158,7 @@ lint:
 		exit 1; \
 	fi; \
 	echo "==> lint OK"
+
+provision:
+	@echo "==> KeyQuest server provisioning (OS-level steps need sudo)"
+	@./scripts/provision-server.sh
