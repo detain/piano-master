@@ -21,7 +21,7 @@ admin-scoped.
 
 ## Dev
 
-Requires Node 20.19+ / 22+ (Vite 6).
+Requires Node 20.19+ / 22+ (Vite 8).
 
 ```bash
 npm install        # first install generates package-lock.json (not committed yet)
