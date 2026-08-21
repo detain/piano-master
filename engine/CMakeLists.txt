@@ -20,11 +20,17 @@ endif()
 add_library(engine_core STATIC
     src/stub.cpp
     src/dsp/RingBuffer.cpp
+    src/dsp/YinDetector.cpp
 )
 
 target_include_directories(engine_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+# m (libm) is required by the YIN pitch detector (std::log2/std::lround) and
+# by std::lround in the WAV test util. Carried PUBLIC so every consumer of
+# engine_core (host tests, Android NDK) links it transitively.
+target_link_libraries(engine_core PUBLIC m)
 
 # --- Host tests (run on Linux CI, no device) --------------------------------
 enable_testing()
@@ -39,8 +45,7 @@ target_include_directories(engine_host_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/test
 )
 
-# m (libm) is linked for upcoming DSP work (YIN pitch detection) and for
-# std::lround in the WAV test util; no harm while unused.
-target_link_libraries(engine_host_tests PRIVATE engine_core m)
+# m comes transitively from engine_core's PUBLIC link.
+target_link_libraries(engine_host_tests PRIVATE engine_core)
 
 add_test(NAME engine_host_tests COMMAND engine_host_tests)
