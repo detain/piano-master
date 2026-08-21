@@ -1,0 +1,4 @@
+# KeyQuest api — local runtime artifacts (never committed).
+# Root .gitignore already covers /api/vendor/, /api/.env, /api/.phpunit.cache/.
+/runtime/
+/workerman.log

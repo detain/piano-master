@@ -1,6 +1,6 @@
 <?php
 /**
- * Webman custom processes (plan §13.4.1) — placeholder.
+ * Webman custom processes (plan §13.4.1).
  *
  * Every entry spawns a long-lived worker beside the HTTP workers. The
  * cardinal rule: exactly ONE instance of anything that must not run twice.
@@ -8,12 +8,16 @@
  * refresh timer) so even a botched deploy that starts two copies degrades
  * to one active.
  *
+ * P0.6.1 spike: no custom processes yet — the HTTP worker defined by
+ * config/server.php is the whole runtime. The inventory below is the plan's
+ * production inventory, commented out until each process lands (P1/P2).
+ *
  * Process inventory (planned):
- *  - webman (HTTP) 4 × vCPU      — REST API, stateless per request.
+ *  - webman (HTTP) 4 x vCPU      — REST API, stateless per request.
  *  - rtdn-consumer (1)           — pulls Google Pub/Sub RTDN notifications,
  *                                  writes job_outbox, drives the entitlement
  *                                  state machine (§15). Ordering matters.
- *  - queue-consumer (2–4)        — webman/redis-queue consumer: pipeline
+ *  - queue-consumer (2-4)        — webman/redis-queue consumer: pipeline
  *                                  dispatch, CDN purge, email, receipt
  *                                  re-verification.
  *  - workout-gen (1)             — nightly per-profile 5-Min Workout

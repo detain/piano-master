@@ -1,13 +1,12 @@
 <?php
 /**
- * Exception handler configuration — placeholder.
+ * Exception handler configuration.
  *
- * Webman's default handler returns an HTML error page; swap in a JSON
- * ErrorHandler that returns { "code", "message" } for the API and never leaks
- * a stack trace to the client. Log full context server-side with the
- * request-id (§13.6).
+ * '' applies to every app; the class renders every uncaught exception as JSON
+ * so the API never returns HTML error pages or leaks stack traces to clients
+ * (plan §13.6 / config placeholder notes).
  */
 
 return [
-    // 'class' => \support\exception\Handler::class,
+    '' => \support\exception\Handler::class,
 ];

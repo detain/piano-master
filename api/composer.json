@@ -8,6 +8,7 @@
         "php": ">=8.3",
         "guzzlehttp/guzzle": "^7.8",
         "lcobucci/jwt": "^5.0",
+        "monolog/monolog": "^3.0",
         "psr/log": "^3.0",
         "respect/validation": "^2.3",
         "webman/database": "^1.0",

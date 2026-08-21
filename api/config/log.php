@@ -1,22 +1,36 @@
 <?php
 /**
- * Logging configuration — placeholder.
+ * Logging configuration — support\Log::channel('default').
  *
- * Completed during the first real install (webman console generates the full
- * file). Plan (§13.6): structured JSON lines to stdout → journald, with a
- * request-id set in middleware and echoed in the X-Request-Id response header.
+ * The framework constructs its app logger from config('log')['default'] at
+ * worker start (support\App.php → Log::channel('default')), so this channel
+ * must exist. Plan §13.6: log to stdout → journald; per-request structured
+ * JSON lines come from RequestIdMiddleware, this channel handles exception
+ * reports from the JSON exception handler.
  */
 
+use Monolog\Formatter\LineFormatter;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
+
 return [
-    // 'default' => [
-    //     'handlers' => [
-    //         [
-    //             'class' => \Monolog\Handler\StreamHandler::class,
-    //             'constructor' => [
-    //                 'stream' => 'php://stdout',
-    //                 'level' => \Monolog\Logger::DEBUG,
-    //             ],
-    //         ],
-    //     ],
-    // ],
+    'default' => [
+        'handlers' => [
+            [
+                'class' => StreamHandler::class,
+                'constructor' => [
+                    'stream' => 'php://stdout',
+                    'level' => Logger::DEBUG,
+                ],
+                'formatter' => [
+                    'class' => LineFormatter::class,
+                    'constructor' => [
+                        'format' => "[%datetime%] %level_name% %message% %context%\n",
+                        'dateFormat' => 'Y-m-d H:i:s',
+                        'allowInlineLineBreaks' => true,
+                    ],
+                ],
+            ],
+        ],
+    ],
 ];

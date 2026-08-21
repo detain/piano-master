@@ -1,26 +1,18 @@
 <?php
 /**
- * Middleware configuration — placeholder.
+ * Middleware configuration.
  *
- * Planned global middleware (register at bootstrap only — anything registered
- * in a request loop leaks, §13.4.2):
- *  - RequestIdMiddleware  — sets the request-id, echoes X-Request-Id, seeds
- *                           structured log context (§13.6).
- *  - CorsMiddleware       — admin CMS and mobile clients.
- *  - ValidateRequest      — respect/validation (or illuminate/validation
- *                           standalone) invoked per-route (§13.4.4).
- *  - AuthMiddleware       — JWT bearer verify + entitlement token.
- *  - RateLimitMiddleware  — Dragonfly EVAL token bucket (§13.5).
+ * Middleware is registered ONCE at bootstrap (support/bootstrap.php →
+ * Middleware::load). Anything registered per request leaks across requests in
+ * a long-lived worker (§13.4.2).
  *
- * Per-route / per-controller middleware are keyed by path here; '@' applies
- * to every route.
+ * '@' applies to every route. The P0.6 placeholder auth middleware is
+ * registered per-route in config/route.php (POST /auth/echo only) — P2.A2
+ * replaces it with real JWT bearer auth.
  */
 
 return [
-    // '@' => [
-    //     \App\Middleware\RequestIdMiddleware::class,
-    // ],
-    // 'auth' => [
-    //     \App\Middleware\AuthMiddleware::class,
-    // ],
+    '@' => [
+        \App\Middleware\RequestIdMiddleware::class,
+    ],
 ];

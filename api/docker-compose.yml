@@ -1,0 +1,46 @@
+# KeyQuest API — local dev dependencies (P0.6.1 spike).
+#
+# Pinned images per toolchain.md:
+#   MySQL      mysql:8.0.43
+#   Dragonfly  ghcr.io/dragonflydb/dragonfly:v1.29.0
+#
+# Usage (from api/):
+#   docker compose up -d
+#   php start.php start
+#
+# Both services expose default ports on 127.0.0.1 and have healthchecks so
+# `docker compose ps` shows them healthy before the API boots.
+
+services:
+  mysql:
+    image: mysql:8.0.43
+    container_name: keyquest-mysql
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: keyquest
+      MYSQL_ROOT_HOST: "%"
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "--silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  dragonfly:
+    image: ghcr.io/dragonflydb/dragonfly:v1.29.0
+    container_name: keyquest-dragonfly
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s

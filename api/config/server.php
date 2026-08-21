@@ -1,27 +1,33 @@
 <?php
 /**
- * HTTP server configuration — placeholder.
+ * HTTP server configuration.
  *
- * Completed during the first real install. Webman's default listen is
- * http://0.0.0.0:8787; plan §13.6 has nginx terminating TLS and
- * reverse-proxying to 127.0.0.1:8787 (proxy_http_version 1.1, keepalive
- * upstream, WebSocket upgrade headers ready).
+ * Webman reads every key here once at bootstrap. All keys are defined so the
+ * long-lived worker boots without undefined-array-key warnings under PHP 8.
+ *
+ * Plan §13.6: nginx terminates TLS and reverse-proxies to 127.0.0.1:8787.
+ * Default `count` is 1 worker for the spike (deterministic logs, matches the
+ * P0.6.3 longevity soak); scale to 4 x vCPU at deploy time.
  */
 
 return [
-    // 'listen' => 'http://0.0.0.0:8787',
-    // 'transport' => 'tcp',
-    // 'context' => [],
-    // 'name' => 'keyquest-api',
-    // 'count' => 4, // 4 × vCPU, tuned at deploy
-    // 'user' => '',
-    // 'group' => '',
-    // 'reusePort' => false,
-    // 'event_loop' => '',
-    // 'stop_timeout' => 2,
-    // 'pid_file' => '',
-    // 'status_file' => '',
-    // 'stdout_file' => '',
-    // 'log_file' => '',
-    // 'max_package_size' => 10 * 1024 * 1024,
+    // Override the whole listen string via env, e.g. WEBMAN_LISTEN=http://127.0.0.1:18787
+    'listen' => getenv('WEBMAN_LISTEN') ?: 'http://0.0.0.0:8787',
+    'transport' => 'tcp',
+    'context' => [],
+    'name' => 'keyquest-api',
+    'count' => (int) (getenv('WEBMAN_COUNT') ?: 1),
+    'user' => getenv('WEBMAN_USER') ?: '',
+    'group' => getenv('WEBMAN_GROUP') ?: '',
+    'reusePort' => false,
+    'event_loop' => '',
+    'stop_timeout' => 2,
+    'pid_file' => runtime_path('webman.pid'),
+    'status_file' => runtime_path('webman.status'),
+    // stdout_file stays empty so boot logs and the middleware request log
+    // lines (plan §13.6) land on the terminal in foreground mode; Workerman's
+    // own status log goes into runtime/ (git-ignored).
+    'stdout_file' => '',
+    'log_file' => runtime_path('logs/workerman.log'),
+    'max_package_size' => 10 * 1024 * 1024,
 ];
