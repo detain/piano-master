@@ -6,14 +6,14 @@ namespace Tests\Integration;
 
 use GuzzleHttp\Client;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
-use Throwable;
 
 /**
  * P0.6.1 skeleton route integration test (plan §13.7).
  *
  * Boots a REAL Webman instance on an ephemeral port in a child process and
- * hits it over HTTP with Guzzle — no framework test harness. Requires MySQL +
+ * hits it over HTTP with Guzzle — no framework test harness. The child-process
+ * boot (port reservation, WEBMAN_LISTEN env override, /readyz wait, teardown)
+ * lives in WebmanTestHarness, shared with WorkerLongevityTest. Requires MySQL +
  * Dragonfly reachable (api/docker-compose.yml). If they are not reachable the
  * whole class SKIPS (never fails), so the suite stays green in CI without
  * services; locally with docker up it fully passes.
@@ -22,76 +22,18 @@ final class SkeletonRoutesTest extends TestCase
 {
     private const SKIP_MESSAGE = 'MySQL/Dragonfly not reachable — start services with `docker compose up -d` in api/ (see api/docker/README.md).';
 
-    private const BOOT_TIMEOUT_SECONDS = 30;
-
-    private static mixed $serverProcess = null;
-    private static string $serverLogFile = '';
-    private static string $baseUrl = '';
-
     public static function setUpBeforeClass(): void
     {
-        if (!self::dependenciesReachable()) {
+        if (!WebmanTestHarness::dependenciesReachable()) {
             self::markTestSkipped(self::SKIP_MESSAGE);
         }
 
-        $port = self::findFreePort();
-        self::$baseUrl = 'http://127.0.0.1:' . $port;
-        self::$serverLogFile = sys_get_temp_dir() . '/kq-integration-' . getmypid() . '.log';
-
-        $env = getenv();
-        $env['WEBMAN_LISTEN'] = 'http://127.0.0.1:' . $port;
-        $env['DEV_API_TOKEN'] = 'dev-token';
-
-        self::$serverProcess = proc_open(
-            [PHP_BINARY, 'start.php', 'start'],
-            [
-                0 => ['pipe', 'r'],
-                1 => ['file', self::$serverLogFile, 'a'],
-                2 => ['file', self::$serverLogFile, 'a'],
-            ],
-            $pipes,
-            dirname(__DIR__, 2), // api/ — tests/Integration -> api
-            $env
-        );
-
-        if (!is_resource(self::$serverProcess)) {
-            throw new RuntimeException('Failed to start Webman child process');
-        }
-
-        self::waitForServer();
+        WebmanTestHarness::boot();
     }
 
     public static function tearDownAfterClass(): void
     {
-        if (!is_resource(self::$serverProcess)) {
-            return;
-        }
-        proc_terminate(self::$serverProcess);
-        $deadline = microtime(true) + 5;
-        while (microtime(true) < $deadline) {
-            $status = proc_get_status(self::$serverProcess);
-            if (!$status['running']) {
-                break;
-            }
-            usleep(100_000);
-        }
-
-        // SIGTERM is cooperative — a lingering Workerman master can keep
-        // proc_close() blocked. Escalate to SIGKILL so teardown always returns.
-        $status = proc_get_status(self::$serverProcess);
-        if ($status['running']) {
-            proc_terminate(self::$serverProcess, 9);
-            $killDeadline = microtime(true) + 2;
-            while (microtime(true) < $killDeadline) {
-                $status = proc_get_status(self::$serverProcess);
-                if (!$status['running']) {
-                    break;
-                }
-                usleep(100_000);
-            }
-        }
-        proc_close(self::$serverProcess);
-        self::$serverProcess = null;
+        WebmanTestHarness::shutdown();
     }
 
     public function testRootReturnsStaticJson(): void
@@ -195,7 +137,7 @@ final class SkeletonRoutesTest extends TestCase
     private function client(): Client
     {
         return new Client([
-            'base_uri' => self::$baseUrl,
+            'base_uri' => WebmanTestHarness::baseUrl(),
             'timeout' => 5,
             'connect_timeout' => 2,
             'http_errors' => false,
@@ -211,84 +153,5 @@ final class SkeletonRoutesTest extends TestCase
         self::assertIsArray($data);
 
         return $data;
-    }
-
-    /**
-     * TCP-probe MySQL and Dragonfly with short timeouts. This is the SKIP
-     * gate: unreachable services => skipped class, never a failure.
-     */
-    private static function dependenciesReachable(): bool
-    {
-        $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
-        $dbPort = (int) (getenv('DB_PORT') ?: 3306);
-        $redisHost = getenv('REDIS_HOST') ?: '127.0.0.1';
-        $redisPort = (int) (getenv('REDIS_PORT') ?: 6379);
-
-        return self::tcpReachable($dbHost, $dbPort)
-            && self::tcpReachable($redisHost, $redisPort);
-    }
-
-    private static function tcpReachable(string $host, int $port): bool
-    {
-        $errno = 0;
-        $errstr = '';
-        $socket = @fsockopen($host, $port, $errno, $errstr, 2);
-        if (is_resource($socket)) {
-            fclose($socket);
-            return true;
-        }
-        return false;
-    }
-
-    private static function findFreePort(): int
-    {
-        $server = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        if (!$server) {
-            throw new RuntimeException("Unable to reserve ephemeral port: $errstr");
-        }
-        $name = stream_socket_get_name($server, false);
-        fclose($server);
-        $port = (int) substr(strrchr($name, ':'), 1);
-
-        return $port;
-    }
-
-    /**
-     * Poll GET /readyz (expect 200) until the child serves HTTP or the boot
-     * deadline hits. /readyz is preferred over /healthz so a fresh
-     * `docker compose up` with mysql-init still running makes us wait instead
-     * of failing on a port-open-but-not-ready window.
-     */
-    private static function waitForServer(): void
-    {
-        $client = new Client([
-            'base_uri' => self::$baseUrl,
-            'timeout' => 2,
-            'connect_timeout' => 1,
-            'http_errors' => false,
-        ]);
-
-        $deadline = microtime(true) + self::BOOT_TIMEOUT_SECONDS;
-        while (microtime(true) < $deadline) {
-            $status = proc_get_status(self::$serverProcess);
-            if (!$status['running']) {
-                throw new RuntimeException(
-                    'Webman child process exited during boot; see ' . self::$serverLogFile
-                );
-            }
-            try {
-                if ($client->get('/readyz')->getStatusCode() === 200) {
-                    return;
-                }
-            } catch (Throwable) {
-                // Not up yet — keep polling.
-            }
-            usleep(200_000);
-        }
-
-        throw new RuntimeException(
-            'Webman child process did not become ready within ' . self::BOOT_TIMEOUT_SECONDS
-            . 's; see ' . self::$serverLogFile
-        );
     }
 }
