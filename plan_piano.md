@@ -2652,3 +2652,34 @@ real reason the educator is the first hire, not the last.
   https://pianistscompass.org/reviews/apps/simply-piano/ ·
   https://www.musicradar.com/reviews/simply-piano-review ·
   https://piano-help.hellosimply.com/en/collections/1512479-simply-piano-note-recognition-and-midi-help
+
+---
+
+## 24. Build Status Log
+
+> Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
+
+### 2026-08-21 — P0.1 + P0.2 (partial) + P0.6 (partial): monorepo green, CI passing
+**Commits:** `612e70f` (initial) → `246b2b2` (P0.1 scaffold) → `deaadbf` + `99538ee` (P0.6.1 Webman skeleton + review fixes) → `3ae0045` (engine core part 1) → `a16ca23` + `e78c657` (YIN core + review fixes) → `71574a3` + `a4b4fde` (P0.6.2-4 test suites + review fixes) → `4fe5a35` (Vite 6→8.2.2) → `d6253fe` → `1544284` → `3d8584a` (CI fixes) → `3c2847a` (provisioning).
+**What shipped:**
+- P0.1 complete: 7-workspace monorepo, toolchain pinning (toolchain.md + version catalogs), GitHub Actions CI (5 jobs: engine-host-tests, android-unit, api-tests, cms-build, lint-all), ADR practice (docs/adr/0001). License: proprietary (user decision).
+- P0.2 partial: engine core — NoteEvent, lock-free SPSC RingBuffer, wav_util, YIN/pYIN monophonic detector in engine::dsp with boundary/DC/null guards. Host tests pass in Release+Debug with -Werror. Full pitch test harness + Oboe input + JNI bridge NOT yet built.
+- P0.6 partial: Webman 2.1 skeleton (6 routes incl. healthz/readyz, DB/Redis/Dragonfly wiring, request-id middleware, dev-auth placeholder), docker-compose (MySQL 8.0.43 + Dragonfly v1.29.0 GHCR), PHPUnit integration suite (18 tests/92 assertions) incl. worker-longevity (10k req, 0 bleed, RSS +120kB), Dragonfly command-surface test (89 commands + §13.5 fence probes), RedisCommandRecorder wired into app path, state-bleed guard greps. P0.6.5 load baseline (k6), P0.6.6 drills, P0.6.7 coroutine ADR NOT yet done.
+- CMS: Vite 8.2.2 + plugin-vue 6.0.8, build green.
+- Ops: scripts/provision-server.sh (Ubuntu 24.04 bootstrap, --with-android, --check), named MySQL volume for dev data persistence.
+**CI:** green (all 5 jobs) on master; triggers on push master/main + PR.
+**Environment (local):** Android SDK (platform 36, build-tools 36, NDK r27d), Docker daemon up + group membership, pnpm 11.22. MySQL/Dragonfly images pre-pulled.
+**Next (in order):** P0.2 pitch test harness + Oboe/JNI (P0.2.1/3/4) → P0.6.5 k6 load baseline + P0.6.6 drills + P0.6.7 ADR → P0.5 notation renderer → P0.3 bake-off → P0.9 gate review.
+
+### Rulings made (orchestrator)
+- License: proprietary/all-rights-reserved (user 2026-08-21); MPL-2.0 scaffold text replaced.
+- Dragonfly images from GHCR only (Docker Hub stale); pinned v1.29.0.
+- NDK pinned 27.3.13750724 (r27d) installed locally.
+- YIN default 2048-window/48kHz resolves ≥~47Hz (F#1+); A0–F#1 deferred to a lowFreq mode (windowSize 4096) to be built+validated with the P0.2 pitch harness.
+- P0.6.3 full soak (100k/1h) + P0.6.4 restart-mid-consume drill are documented as manual drills (api/tests/Integration/SoakDrill.md) to run before the P0.9 gate review, not automated in CI.
+- setup-android@v3 packages input is space-separated; MySQL schema applied in CI via PHP PDO step (volume mount hits EACCES pre-checkout).
+
+### Known gaps / debt (non-blocking)
+- pre-existing lint warnings (vue singleline-html) in cms; Node-20 deprecation warnings on checkout@v4/setup-node@v4 (non-gating); esbuild/vue-demi allow-scripts notices; redis.php EOF newline.
+- api .env not committed (vars documented in api/README.md).
+- gradle wrapper now committed; android CI uses ./gradlew directly.
