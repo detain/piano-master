@@ -8,6 +8,7 @@
  */
 
 use App\Controller\AuthEchoController;
+use App\Controller\BenchController;
 use App\Controller\CacheController;
 use App\Controller\DbController;
 use App\Controller\HealthController;
@@ -33,3 +34,8 @@ Route::get('/cache/now', [CacheController::class, 'now']);
 // Authenticated write (P0.6.1 placeholder auth — P2.A2 replaces it).
 Route::post('/auth/echo', [AuthEchoController::class, 'echo'])
     ->middleware([DevAuthMiddleware::class]);
+
+// PHASE-0 SPIKE (P0.6.7): outbound-HTTP coroutine-pose benchmark. Serves the
+// docs/adr/0002-coroutine-posture.md measurements only; remove with the ADR
+// review (or keep if the bench becomes a permanent perf harness — see ADR).
+Route::get('/bench/outbound', [BenchController::class, 'outbound']);

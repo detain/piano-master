@@ -11,9 +11,11 @@
         "monolog/monolog": "^3.0",
         "psr/log": "^3.0",
         "respect/validation": "^2.3",
+        "revolt/event-loop": "^1.0",
         "webman/database": "^1.0",
         "webman/redis": "^1.0",
         "webman/redis-queue": "^1.0",
+        "workerman/http-client": "^3.1",
         "workerman/webman-framework": "^2.1"
     },
     "require-dev": {

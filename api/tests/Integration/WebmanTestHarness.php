@@ -70,11 +70,17 @@ final class WebmanTestHarness
      *
      * @param array<string, string> $extraEnv env vars to add/override for the
      *                                       child process (test seams).
+     * @param bool                  $requireReady wait for /readyz (200) when
+     *                                       true; wait for /healthz (liveness
+     *                                       only, no dependencies) when
+     *                                       false. The degradation test boots
+     *                                       with an unreachable Dragonfly and
+     *                                       uses $requireReady=false.
      *
      * @throws RuntimeException when the child dies during boot or the boot
      *                          deadline expires (log path is in the message).
      */
-    public static function boot(array $extraEnv = []): void
+    public static function boot(array $extraEnv = [], bool $requireReady = true): void
     {
         $port = self::findFreePort();
         self::$baseUrl = 'http://127.0.0.1:' . $port;
@@ -101,7 +107,7 @@ final class WebmanTestHarness
         }
 
         self::$masterPid = (int) proc_get_status(self::$process)['pid'];
-        self::waitForServer();
+        self::waitForServer($requireReady);
     }
 
     /**
@@ -246,10 +252,10 @@ final class WebmanTestHarness
     }
 
     /**
-     * Poll GET /readyz (expect 200) until the child serves HTTP or the boot
-     * deadline hits.
+     * Poll the boot probe (GET /readyz when dependencies must be up, else
+     * GET /healthz) until the child serves HTTP or the boot deadline hits.
      */
-    private static function waitForServer(): void
+    private static function waitForServer(bool $requireReady = true): void
     {
         $client = new Client([
             'base_uri' => self::$baseUrl,
@@ -258,6 +264,7 @@ final class WebmanTestHarness
             'http_errors' => false,
         ]);
 
+        $probe = $requireReady ? '/readyz' : '/healthz';
         $deadline = microtime(true) + self::BOOT_TIMEOUT_SECONDS;
         while (microtime(true) < $deadline) {
             $status = proc_get_status(self::$process);
@@ -267,7 +274,7 @@ final class WebmanTestHarness
                 );
             }
             try {
-                if ($client->get('/readyz')->getStatusCode() === 200) {
+                if ($client->get($probe)->getStatusCode() === 200) {
                     return;
                 }
             } catch (Throwable) {

@@ -65,9 +65,19 @@ final class StateBleedGuardTest extends TestCase
      * File:line => reason. Mutable statics in app/ are forbidden; anything
      * listed here must be immutable-once-set and prove it with a comment.
      *
+     * Whitelist rationale:
+     *  - app/Support/CacheGuard.php:33 — the warn-throttle timestamp is
+     *    PROCESS state, not request data: it records "when did this worker
+     *    last print a cache-availability warning" so an outage logs one line
+     *    per throttle interval instead of one per request. No request value
+     *    ever crosses it (§13.4.2 allows legitimate process state; P0.6.6
+     *    failover drill requires the throttle).
+     *
      * @var array<string, string>
      */
-    private const STATIC_WHITELIST = [];
+    private const STATIC_WHITELIST = [
+        'app/Support/CacheGuard.php:33' => 'process-static warn throttle (microtime), never request data — P0.6.6 CacheGuard, documented in class docblock',
+    ];
 
     public function testNoExitOrDieOutsideStartPhp(): void
     {
