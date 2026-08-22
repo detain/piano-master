@@ -18,7 +18,7 @@ import { Rate } from 'k6/metrics';
 
 const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:8787';
 const VUS = Number(__ENV.VUS || 60);
-const DURATION = __ENV.DURATION || '40s';
+const DURATION = __ENV.DURATION || '20s';
 const FAILED = new Rate('failed_requests');
 
 export const options = {

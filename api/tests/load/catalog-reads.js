@@ -42,6 +42,12 @@ export const options = {
 
 export default function () {
   const res = http.get(`${BASE_URL}/cache/now`);
-  check(res, { 'GET /cache/now -> 200': (r) => r.status === 200 });
+  check(res, {
+    'GET /cache/now -> 200': (r) => r.status === 200,
+    // Non-drill runs must fail loudly on an outage: the drill (drills.md)
+    // verifies the degraded path deliberately with curl probes, so this
+    // check only guards regression runs against an unintended outage.
+    'not degraded': (r) => r.json().degraded !== true,
+  });
   FAILED.add(res.status !== 200);
 }

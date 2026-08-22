@@ -26,19 +26,26 @@ use RuntimeException;
  *
  * Boot uses WebmanTestHarness::boot([...], requireReady: false) because
  * /readyz is deliberately NOT ready here; the harness waits on /healthz
- * (liveness) instead. No dependency skip gate: the whole point is an
- * unreachable cache, and /db/version needs MySQL, but the test asserts the
- * MySQL-independent surface only — it stays green even with MySQL down.
+ * (liveness) instead. The class SKIPS when MySQL is unreachable
+ * (WebmanTestHarness::mysqlReachable) because testNonCacheRoutesKeepServing
+ * asserts /db/version (a real MySQL round trip); the degraded-Dragonfly boot
+ * needs no reachable cache by construction.
  */
 final class CacheDegradationTest extends TestCase
 {
-    private const SKIP_MESSAGE = 'Cannot reserve a closed port for the degraded-Dragonfly boot.';
+    private const SKIP_MESSAGE = 'MySQL not reachable — start services with `docker compose up -d` in api/ (see api/docker/README.md).';
+
+    private const SKIP_PORT_MESSAGE = 'Cannot reserve a closed port for the degraded-Dragonfly boot.';
 
     public static function setUpBeforeClass(): void
     {
+        if (!WebmanTestHarness::mysqlReachable()) {
+            self::markTestSkipped(self::SKIP_MESSAGE);
+        }
+
         $closedPort = self::reserveClosedPort();
         if ($closedPort === null) {
-            self::markTestSkipped(self::SKIP_MESSAGE);
+            self::markTestSkipped(self::SKIP_PORT_MESSAGE);
         }
 
         WebmanTestHarness::boot(

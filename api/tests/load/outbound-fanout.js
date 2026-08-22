@@ -4,8 +4,8 @@
 // requests to the local mock upstream (api/tests/load/README.md "mock
 // upstream" section; the threaded Python server in /tmp). mode=blocking runs
 // N sequential Guzzle requests in the worker; mode=fiber runs N concurrent
-// Workerman fibers joined with a WaitGroup (requires the Fiber event loop:
-// WEBMAN_EVENT_LOOP="Workerman\Events\Fiber").
+// Workerman fibers joined with Workerman\Coroutine\Parallel (requires the
+// Fiber event loop: WEBMAN_EVENT_LOOP="Workerman\Events\Fiber").
 //
 // This is the measurement behind docs/adr/0002-coroutine-posture.md — see
 // that ADR for the decision. Run each mode against the correctly configured

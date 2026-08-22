@@ -63,6 +63,7 @@ final class CacheGuard
             [
                 'ts' => date('c'),
                 'event' => 'cache_guard.degraded',
+                'class' => get_class($throwable),
                 'message' => $throwable->getMessage(),
             ],
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE

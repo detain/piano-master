@@ -242,13 +242,25 @@ final class WebmanTestHarness
      */
     public static function dependenciesReachable(): bool
     {
-        $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
-        $dbPort = (int) (getenv('DB_PORT') ?: 3306);
         $redisHost = getenv('REDIS_HOST') ?: '127.0.0.1';
         $redisPort = (int) (getenv('REDIS_PORT') ?: 6379);
 
-        return self::tcpReachable($dbHost, $dbPort)
+        return self::mysqlReachable()
             && self::tcpReachable($redisHost, $redisPort);
+    }
+
+    /**
+     * TCP-probe only MySQL. CacheDegradationTest uses this instead of
+     * dependenciesReachable(): it boots the child with an UNREACHABLE
+     * Dragonfly by construction, so a both-services probe would skip it for
+     * the wrong reason, while /db/version still needs MySQL up.
+     */
+    public static function mysqlReachable(): bool
+    {
+        $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
+        $dbPort = (int) (getenv('DB_PORT') ?: 3306);
+
+        return self::tcpReachable($dbHost, $dbPort);
     }
 
     /**
