@@ -39,10 +39,18 @@ constexpr int kLowFreqLast = 42;  // lowFreq group: MIDI 21..42
 // Boundary-honesty negatives: notes whose true period exceeds the standard
 // window's searchable maximum (halfWindow - 1 = 1023 samples -> 46.9 Hz).
 // MIDI 21..28 (A0..E1, 27.5..41.2 Hz, periods 1165..1745) exceed it, so the
-// standard 2048 config must refuse them. MIDI 29..42 (F1..F#2) sit at/above
-// the boundary and are confidently resolved by the standard window (verified
-// empirically below), so they are informational probes, not negatives.
-constexpr int kBoundaryNegativeLast = 28;
+// standard 2048 config must refuse them. F1 (43.65 Hz, period ~1099.7
+// samples) and F#1 (46.25 Hz, period ~1037.8) also sit beyond the boundary,
+// but the threshold path selects tau0 < maxTau, so the boundary-honesty
+// guard (tau0 == maxTau) never fires and parabolic interpolation
+// extrapolates the period — they resolve at conf 1.000, they are not
+// refusals. G1 (49.0 Hz, period ~979.6) is the first note genuinely
+// at/below the boundary, yet its low edge is ragged (standard mode claims it
+// flat as pitch 30, F#1, at conf 1.000 in 22/46 windows) — the ragged edge
+// that justifies routing MIDI 21..42 through lowFreq per the plan split.
+constexpr int kBoundaryNegativeLast = 28;  // standard must refuse MIDI 21..28
+constexpr int kGrayZoneLast = 31;  // MIDI 29..31: informational probes only
+constexpr int kFloorPinFirst = 32;  // standard must resolve MIDI 32..42
 constexpr double kConfident = 0.8;
 
 // LowFreq config: 4096-sample window so periods up to ~2047 samples
@@ -224,12 +232,19 @@ bool runPitchTests(const char* fixturesDir) {
     // samples — beyond the boundary — so every one MUST be refused; this
     // proves lowFreq mode is required for the below-boundary notes.
     //
-    // MIDI 29..42 (F1..F#2) have periods 519..1100 samples: they sit at or
-    // above the boundary, and parabolic interpolation lets the standard
-    // window confidently resolve them (shown below for transparency) — they
-    // are therefore not negatives. The suite still routes them through
-    // lowFreq per the plan split because standard's low edge is ragged
-    // (e.g. G1 -> pitch 30, one semitone flat).
+    // MIDI 29..31 are informational probes, not negatives. F1 (43.65 Hz,
+    // period ~1099.7 samples) and F#1 (46.25 Hz, period ~1037.8) also sit
+    // beyond the 1023-sample boundary, yet the threshold path selects
+    // tau0 < maxTau, so the boundary-honesty guard (tau0 == maxTau) does not
+    // fire and parabolic interpolation extrapolates the period — both
+    // resolve at conf 1.000. "Beyond the boundary" is therefore not the same
+    // as "refused". G1 (49.0 Hz, period ~979.6) is the first note genuinely
+    // at/below the boundary, but standard mode claims it flat (pitch 30,
+    // F#1, at conf 1.000 in 22/46 windows) — the ragged low edge that
+    // justifies routing MIDI 21..42 through lowFreq per the plan split.
+    // MIDI 32..42 (G#1..F#2) must resolve exactly under standard: the floor
+    // pin below asserts that, locking in the documented reliable floor
+    // (~52 Hz, G#1+).
     const int kNegativeCount = kBoundaryNegativeLast - kFirstMidi + 1;
     int negativesHeld = 0;
     std::printf("\nnegatives (standard 2048, boundary-honesty A0..E1):\n");
@@ -247,8 +262,8 @@ bool runPitchTests(const char* fixturesDir) {
         }
     }
 
-    std::printf("\ninformational (standard 2048 on F1..F#2, MIDI 29..42):\n");
-    for (int midi = kBoundaryNegativeLast + 1; midi <= kLowFreqLast; ++midi) {
+    std::printf("\ninformational (standard 2048 on F1..G1, MIDI 29..31):\n");
+    for (int midi = kBoundaryNegativeLast + 1; midi <= kGrayZoneLast; ++midi) {
         int claimedPitch = -1;
         double claimedConfidence = 0.0;
         const bool held = !standardConfidentlyClaims(
@@ -259,13 +274,38 @@ bool runPitchTests(const char* fixturesDir) {
                     claimedPitch, claimedConfidence);
     }
 
+    // Floor pin: standard 2048 must resolve every note at/above the reliable
+    // floor. G#1..F#2 (MIDI 32..42) currently resolve exactly (conf 1.000 in
+    // every window); asserting this keeps a regression from silently moving
+    // the documented ~52 Hz floor without the suite noticing.
+    std::printf("\nfloor pin (standard 2048 must resolve G#1..F#2, MIDI 32..42):\n");
+    const int kFloorPinCount = kLowFreqLast - kFloorPinFirst + 1;
+    int floorPinned = 0;
+    for (int midi = kFloorPinFirst; midi <= kLowFreqLast; ++midi) {
+        int claimedPitch = -1;
+        double claimedConfidence = 0.0;
+        const bool resolved = standardConfidentlyClaims(
+            fixturePath(fixturesDir, midi), midi, &claimedPitch,
+            &claimedConfidence);
+        std::printf("  %-4s %4d: %s (best pitch %d conf %.3f)\n",
+                    noteName(midi), midi, resolved ? "resolved" : "REFUSED",
+                    claimedPitch, claimedConfidence);
+        if (resolved) {
+            ++floorPinned;
+        }
+    }
+
     std::printf("\npitch-suite: %d/%d correct, %d octave errors, %d misses\n",
                 correct, kNumNotes, octaveErrors, misses);
     std::printf("negatives: %d/%d refused\n", negativesHeld, kNegativeCount);
+    std::printf("floor pin: %d/%d resolved under standard 2048\n", floorPinned,
+                kFloorPinCount);
     std::printf("C8 edge: %s\n", c8Passed ? "PASS" : "FAIL");
 
     const bool pass = correct >= kNumNotes - 1 &&  // >= 87/88 (99%)
-                      negativesHeld == kNegativeCount && c8Passed;
+                      octaveErrors == 0 &&  // a confident octave error is worse than a miss
+                      negativesHeld == kNegativeCount && floorPinned == kFloorPinCount &&
+                      c8Passed;
     std::printf("pitch suite: %s\n", pass ? "PASS" : "FAIL");
     return pass;
 }

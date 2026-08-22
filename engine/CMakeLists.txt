@@ -41,8 +41,22 @@ enable_testing()
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 set(PITCH_FIXTURES_DIR ${CMAKE_BINARY_DIR}/fixtures)
+# The generator writes zero-padded three-digit names (midi_021.wav .. midi_108.wav).
+# Declare ALL 88 files as OUTPUTs of the custom command so deleting any single
+# fixture triggers regeneration; the generator is deterministic, so a rerun is
+# idempotent.
+set(PITCH_FIXTURE_FILES)
+foreach(midi RANGE 21 108)
+    if(midi LESS 100)
+        set(_fixture "midi_0${midi}.wav")
+    else()
+        set(_fixture "midi_${midi}.wav")
+    endif()
+    list(APPEND PITCH_FIXTURE_FILES ${PITCH_FIXTURES_DIR}/${_fixture})
+endforeach()
+
 add_custom_command(
-    OUTPUT ${PITCH_FIXTURES_DIR}/midi_108.wav
+    OUTPUT ${PITCH_FIXTURE_FILES}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PITCH_FIXTURES_DIR}
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/test/tools/gen_pitch_fixtures.py
@@ -52,7 +66,7 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(engine_pitch_fixtures ALL
-    DEPENDS ${PITCH_FIXTURES_DIR}/midi_108.wav
+    DEPENDS ${PITCH_FIXTURE_FILES}
 )
 
 add_executable(engine_host_tests

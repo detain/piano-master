@@ -7,8 +7,11 @@ namespace engine::dsp {
 
 // Pitch-detection configuration for the YIN detector.
 //
-// Default 2048/48kHz resolves ≥ ~47Hz (F#1+); A0–F#1 require lowFreq mode
-// (windowSize 4096) — see plan P0.2.2.
+// Standard 2048/48kHz resolves reliably ≥ ~52 Hz (G#1+); notes below ~43 Hz
+// (≈A0..E1) are refused by boundary honesty; F1–G1 sit in a gray zone
+// resolved by interpolation extrapolation with a ragged low edge (G1 can read
+// one semitone flat). Route the below-standard range (MIDI 21–42, A0..F#2)
+// through lowFreq mode (windowSize 4096); standard handles MIDI 43+.
 struct YinConfig {
   std::size_t windowSize = 2048;
   std::size_t hopSize = 1024;
