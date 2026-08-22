@@ -36,6 +36,15 @@ the 10k run is green again.
 
 > **MANUAL P0.6.3 SOAK — RUN BEFORE THE P0.9 GATE REVIEW.**
 
+> **STATUS (2026-08-22): COMPLETE — full results in
+> `docs/runbooks/soak-results-2026-08-22.md`.** Verdicts: RSS growth 0 kB,
+> p99 3.149 → 2.971 ms, worker never restarted, zero bleed (23.4 M requests).
+> Caveats recorded there: driver does not pace to ~28 req/s (deadline-only),
+> idle-reconnect was a 25-min partial (wait_timeout 8 h), and a forced
+> MySQL-kill test found the immediate reconnect path is broken (500 until the
+> ~50 s pool heartbeat) — Finding A in the results doc. P0.6.4 drill also run;
+> see the same file.
+
 Plan §20 P0.6.3: *One worker, 100 000 requests over an hour, mixed routes.
 Expectation: RSS growth < 5 MB, p99 latency at hour-one within 10% of
 minute-one, worker never restarted, zero cross-request data bleed. Then leave
