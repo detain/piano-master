@@ -1,5 +1,6 @@
 #include "engine/dsp/YinDetector.h"
 #include "engine/engine.h"
+#include "pitch_test.h"
 #include "ring_test.h"
 
 #include <cassert>
@@ -8,6 +9,13 @@
 #include <cstdio>
 #include <numbers>
 #include <vector>
+
+// Fail fast: the pitch suite is only meaningful with generated fixtures, so
+// the build must always define where they live (CMake wires
+// ${CMAKE_BINARY_DIR}/fixtures).
+#ifndef PITCH_FIXTURES_DIR
+#error "PITCH_FIXTURES_DIR must be defined (CMake target_compile_definitions)"
+#endif
 
 namespace {
 
@@ -46,6 +54,9 @@ int main() {
         return 1;
     }
     if (!runYinSmokeCheck()) {
+        return 1;
+    }
+    if (!runPitchTests(PITCH_FIXTURES_DIR)) {
         return 1;
     }
 
