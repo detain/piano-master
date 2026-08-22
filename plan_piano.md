@@ -2672,6 +2672,14 @@ real reason the educator is the first hire, not the last.
 **CI:** green on all pushed commits (remote runs verified via gh).
 **Next:** device hardware (5 phones, DGX-520, MIDI keyboards) for P0.2.4/P0.3.4/P0.4/P0.7 + P0.5.3; rights vetting (P0.8); then Phase-1 hardware-free tracks (P1.1 SongPack spec, P1.2 pipeline CLI, P1.5 scoring engine) and FINAL P0.9 re-issue once hardware + rights land.
 
+### 2026-08-22 (final) — P0.8 rights groundwork + cleanup
+**Commits:** `d415b0b` (P0.8 rights groundwork + stale US-PD wording fix) → `5a7a834` (review-minor cleanup: reconnect doc note, test determinism, soak pacing, k6 thresholds) → final cleanup commit.
+**What shipped:**
+- P0.8 groundwork (research stage): `docs/pd-verification-checklist.md` (per-song PD clearance record template) + `content/rights/candidates-2026-08.md` (15 candidates, 14/15 primaries GLOBALLY PD — the ≥10 requirement is met at research level; legal sign-off P0.8.4 remains human). Ruling corrected: USA public domain = first published 1930 or earlier (plan §8.5.1 stale 'pre-1929' wording fixed).
+- Final cleanup: soak.php rate<1 chunk-bounds, SoakDrill.md --pid doc, catalog-reads.js comment.
+**CI:** green on all pushed commits.
+**Status of the 6-item NEXT WORK list:** 1 P0.2-A3 ✅ · 2 P0.2-B ✅ code/device-pending · 3 P0.6-C ✅ · 4 P0.5 ✅ code/device-pending · 5 P0.3 ✅ harness + partial bake-off (OAF/BasicPitch blocked) · 6 P0.9 ✅ DRAFT go-with-cuts + soak recorded + reconnect fixed + rights groundwork. Remaining blockers are EXTERNAL: hardware (5 phones, DGX-520, MIDI keyboards) for P0.2.4/P0.3.4/P0.4/P0.7/P0.5.3; legal sign-off for rights; 8h overnight idle reconnect test; P0.3.2 test-set assembly.
+
 ### 2026-08-22 — P0.2 (A3+B) + P0.6-C + P0.3.1: pitch harness green, Oboe/JNI wired, load baseline + ADR-0002, eval harness + critical fix
 **Commits:** `00366b9` (P0.2-A3 harness) → `8f862e3` (A3 review fixes) → `84c0f2d` + `2eee95b` (P0.6-C) → `0c49086` (P0.6-C minors) → `4f33c20` (P0.3.1 harness) → `a1a30a2` (pitch-tolerance critical fix) → `8969787` (P0.2-B Oboe/JNI).
 **What shipped:**

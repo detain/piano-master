@@ -37,8 +37,8 @@ export const options = {
   },
   thresholds: {
     failed_requests: ['rate<0.01'],
-    // Gate the exit code on check failures too: any failed check (including
-    // 'not degraded') must fail the run, not just the status rate above.
+    // Gate the exit code on check failures too: sustained check failures
+    // (>1%, including 'not degraded') must fail the run.
     checks: ['rate>0.99'],
   },
 };

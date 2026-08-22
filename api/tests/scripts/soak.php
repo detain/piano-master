@@ -188,8 +188,8 @@ $requests = function () use ($client, $routes, $total, $deadline, $concurrency, 
         // the second. Any total/duration ratio is honored — the old code
         // capped each per-slot wait at 1s, truncating long gaps (e.g.
         // --total=10 --duration=3600 finished in ~10s instead of ~1h).
-        $chunkStartIdx = (int) floor($chunk * $ratePerSecond);
-        $chunkEndIdx = (int) min($total, floor(($chunk + 1) * $ratePerSecond));
+        $chunkStartIdx = (int) ceil($chunk * $ratePerSecond);
+        $chunkEndIdx = (int) min($total, ceil(($chunk + 1) * $ratePerSecond));
         for ($i = $chunkStartIdx; $i < $chunkEndIdx; $i++) {
             $route = $routes[$i % count($routes)];
             $id = 'kq-soak-' . $i . '-' . bin2hex(random_bytes(3));

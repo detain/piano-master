@@ -117,8 +117,8 @@ summary JSON, notably:
 The `rss_kb` column samples the worker's VmRSS once per minute (discovered via
 `runtime/webman.pid` → `/proc/<master>/task/<master>/children`). If the app was
 started with `count=1`, that is the single serving worker. If RSS shows `n/a`,
-the pid file was not found — pass `--pid=<master-pid>` (from `$!` or
-`runtime/webman.pid`).
+confirm `runtime/webman.pid` exists and that the app was started with
+`count=1` — the script discovers the worker only through that pid file.
 
 ### 1d. What to record
 
