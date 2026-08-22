@@ -32,6 +32,10 @@ k6 baseline plus the new P0.6.6 drills.
   The committed `config/server.php` default `count` stays **1** so the
   integration suite (single-child boot, Redis trace seam, longevity RSS
   measurement) is deterministic; load runs pass `WEBMAN_COUNT=4`.
+- **Stop the server before running `vendor/bin/phpunit`.** Both the load
+  server and the test harness write `runtime/webman.pid`; if the load server
+  is up, every integration class fails to boot with "already running" (the
+  suite passed at commit time with the server stopped).
 - **Request logging stays ON.** `RequestIdMiddleware` writes one JSON line
   per request to STDOUT (the production shape — §13.6 observability). Every
   number below includes that cost. At 30k+ req/s the log is a real but
