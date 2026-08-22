@@ -185,7 +185,8 @@ exact config):
 
 Suggested fix (needs P1 planning/ADR, not done here): make webman's
 `connection()`/`reconnect()` invalidate the `Context` cache (or health-check
-the pooled connection before returning it from `Context`).
+the pooled connection before returning it from `Context`). — **FIXED** in the
+`fix:` commit following this runbook; see §7.
 
 Impact: a MySQL restart / network blip / wait_timeout expiry causes up to
 ~50 s of 500s before the heartbeat replaces the connection. The overnight-idle
@@ -277,7 +278,7 @@ Retry path verified: consume → fail → delayed-zset → promote → consume.
 | p99 hour-one within 10% of minute-one | PASS (3.149 → 2.971 ms, −5.6 %) |
 | Worker never restarted | PASS (PIDs constant) |
 | Zero cross-request bleed | PASS (0 mismatches across 23.5 M requests) |
-| Clean MySQL reconnect after idle | **FAIL (immediate path)** — 500 "MySQL server has gone away" after server-side kill; self-heals in ~50 s via pool heartbeat. Finding A |
+| Clean MySQL reconnect after idle | **FAIL (immediate path) as measured; FIXED in the `fix:` commit following this runbook (see §7)** — 500 "MySQL server has gone away" after server-side kill on pre-fix code; the fix makes the FIRST request reconnect (200) and the forced-kill case is now covered by `api/tests/Integration/DbReconnectTest.php` + the soak driver's `--reconnect-check` |
 | Queue survives Dragonfly restart mid-consume | PASS for the achievable subset (no job loss; delayed/retry paths work). Finding E: consumer observability gap + outbox N/A (P1) |
 
 ## 4. What is N/A until P1
@@ -296,7 +297,8 @@ Retry path verified: consume → fail → delayed-zset → promote → consume.
   never replaced and the retry re-runs on the dead connection. First request
   after a connection kill returns 500; recovery only after the pool's ~50 s
   heartbeat. Verified by 4 CLI probes; raw Illuminate reconnects fine. Fix:
-  invalidate/health-check the `Context`-cached connection (P1 + ADR).
+  invalidate/health-check the `Context`-cached connection (P1 + ADR). —
+  **FIXED** in the `fix:` commit following this runbook; see §7.
 - **B. Soak driver `soak.php:140` bug.** `$total` is used in the progress
   closure but not in its `use` list → a PHP `Warning: Undefined variable`
   every minute, the per-minute progress line never prints (DivisionByZeroError
@@ -329,3 +331,97 @@ Retry path verified: consume → fail → delayed-zset → promote → consume.
 - Drill Redis keys removed (`{redis-queue}-waitingkq:drill:queue`,
   `{redis-queue}-delayed`, probe key).
 - `make lint` green.
+
+## 7. Fix — MySQL reconnect on lost connection (Finding A)
+
+Landed in the `fix:` commit following this runbook:
+`fix: MySQL reconnect on lost connection (Context cache eviction) + soak driver fixes + regression test`
+(find it with `git log --grep='MySQL reconnect on lost connection'`).
+
+### 7a. Fix chosen (option + why + vendor evidence)
+
+**Chosen: a reconnect-safe subclass of the vendored manager, wired in via an
+app-level `support\Db` shadow.** No `'reconnect' => true` config option exists
+in the vendored `webman/database` (verified by reading the full package source
+under `vendor/webman/database/` — the only connection options are `pool`
+{max/min_connections, wait_timeout, idle_timeout, heartbeat_interval}), so the
+"enable a framework option" path is unavailable. The wrapper/middleware
+alternative was rejected because the retry must refresh the PDO on the SAME
+Connection object Illuminate already holds (see below) — a middleware that
+evicts the Context cache alone cannot fix the retry, and re-running the whole
+request handler from a middleware would double-execute side effects.
+
+Root-cause mechanics confirmed from `vendor/illuminate/database`:
+- `Connection::tryAgainIfCausedByLostConnection()` calls `$this->reconnect()`
+  and then **re-runs the failed query on the same Connection object**;
+  `Connection::reconnect()` **discards the reconnector's return value**.
+- `DatabaseManager::reconnect($name)` has two branches: if
+  `isset($this->connections[$name])` it calls `refreshPdoConnections()` (fresh
+  PDO swapped onto the same Connection — this is the branch that heals), else
+  it returns a **new** Connection object (which the retry throws away).
+- The vendored `Webman\Database\DatabaseManager::connection()` caches the
+  pooled connection in the request `Context` and NEVER populates
+  `$this->connections`, so Illuminate always takes the "new Connection"
+  branch — the dead PDO is never replaced and the retry re-runs on it → 500.
+
+Fix files:
+- `api/app/Support/ReconnectingDatabaseManager.php` — extends the vendored
+  `Webman\Database\DatabaseManager`; its `reconnect()` puts the Context-cached
+  Connection into `$this->connections` (temporarily) so Illuminate's
+  `reconnect()` takes `refreshPdoConnections()` — a FRESH PDO is swapped onto
+  the SAME Connection object the retry re-runs on, and the connection stays in
+  the pool (its PDO is replaced in place, so the pool never re-issues the dead
+  PDO and keeps a healthy connection for the next request).
+- `api/support/Db.php` — app-level shadow of the vendored `support\Db` facade
+  (Composer PSR-4 resolves `support\` to `api/support/` first). It still
+  requires the vendored Initializer (populates container config + flips the
+  `initialized` guard so the vendored `support\Model` cannot re-create a
+  second global capsule), then installs a capsule built with the fixed
+  DatabaseManager as the global instance (`setAsGlobal()` + `bootEloquent()`,
+  and re-applies `database.default` which `Capsule::setupDefaultConfiguration()`
+  resets to `'default'`).
+
+No per-request overhead: the override runs only when a query already failed
+with a lost-connection error.
+
+### 7b. Regression test
+
+`api/tests/Integration/DbReconnectTest.php`:
+- Test A: boots a real Webman child (WebmanTestHarness), kills the worker's
+  live MySQL connection via `information_schema.processlist` + `KILL`, then
+  asserts the FIRST `GET /db/version` is 200 (not 500) and the second is 200.
+- Test B: unit-ish probe — builds the app's database manager (the reconnect
+  subclass when present, else the vendored manager) against real MySQL, kills
+  its PDO server-side from a second PDO, and asserts the retry evicts +
+  reconnects without a QueryException.
+
+Proven: on pre-fix code both tests FAIL (Test A: `500 is not identical to
+200`; Test B: `SQLSTATE[HY000]: General error: 2006 MySQL server has gone
+away`). After the fix the full suite is green (23 tests, 113 assertions).
+
+### 7c. Manual reproduction after the fix
+
+```bash
+# worker connection id 2579 killed server-side:
+mysql -e "KILL 2579"
+curl -s http://127.0.0.1:8787/db/version   # -> {"db_version":"8.0.43"} HTTP 200 (FIRST request)
+curl -s http://127.0.0.1:8787/db/version   # -> 200 (fresh connection persists, new processlist id)
+```
+
+### 7d. Soak driver fixes (`api/tests/scripts/soak.php`)
+
+- **Finding B** (`$total` scope): `$total` added to the progress closure's
+  `use` list; the per-minute progress line prints again.
+- **Finding C** (no pacing): `--duration` is now a rate limiter — request `i`
+  is scheduled at `startTime + i / (total/duration)`, so the documented
+  `--total=100000 --duration=3600` run actually takes ~1 h.
+- **Finding D** (RSS single-sample): RSS sampling moved BEFORE the progress
+  line and keyed to its own minute bucket, so a progress failure cannot drop
+  the per-minute RSS series.
+- **New `--reconnect-check` step**: kills the worker's MySQL connection and
+  verifies the next `/db/version` reconnects (200), aborting non-zero on
+  failure. Run standalone (`php tests/scripts/soak.php --reconnect-check`) or
+  as a pre-check before the long soak.
+
+`api/tests/Integration/SoakDrill.md` was updated to match (pacing semantics,
+smoke command, and the reconnect-check procedure).

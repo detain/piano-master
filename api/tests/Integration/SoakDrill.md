@@ -39,11 +39,13 @@ the 10k run is green again.
 > **STATUS (2026-08-22): COMPLETE — full results in
 > `docs/runbooks/soak-results-2026-08-22.md`.** Verdicts: RSS growth 0 kB,
 > p99 3.149 → 2.971 ms, worker never restarted, zero bleed (23.4 M requests).
-> Caveats recorded there: driver does not pace to ~28 req/s (deadline-only),
-> idle-reconnect was a 25-min partial (wait_timeout 8 h), and a forced
-> MySQL-kill test found the immediate reconnect path is broken (500 until the
-> ~50 s pool heartbeat) — Finding A in the results doc. P0.6.4 drill also run;
-> see the same file.
+> Caveats recorded there: the driver originally did not pace to ~28 req/s
+> (deadline-only) and a forced MySQL-kill test found the immediate reconnect
+> path was broken (500 until the ~50 s pool heartbeat) — Finding A. Both are
+> now FIXED: the driver paces `--duration` as a rate limiter, and the MySQL
+> lost-connection reconnect is covered by `DbReconnectTest` plus the driver's
+> `--reconnect-check` step (see §1f). P0.6.4 drill also run; see the same
+> file.
 
 Plan §20 P0.6.3: *One worker, 100 000 requests over an hour, mixed routes.
 Expectation: RSS growth < 5 MB, p99 latency at hour-one within 10% of
@@ -68,8 +70,8 @@ curl -s http://127.0.0.1:8787/readyz        # {"status":"ready",...}
 ### 1b. Run the soak driver
 
 ```bash
-# Terminal 2 — the load (sustains 100 000 requests over 3600 s at
-# concurrency 16; ~28 req/s, the plan's profile).
+# Terminal 2 — the load (100 000 requests paced across 3600 s at ~28 req/s,
+# the plan's profile; --duration is a RATE LIMITER, not a deadline).
 php tests/scripts/soak.php \
   --base=http://127.0.0.1:8787 \
   --total=100000 \
@@ -78,10 +80,11 @@ php tests/scripts/soak.php \
   --summary=/tmp/kq-soak-summary.json
 ```
 
-Quick smoke before the real run (validates setup in seconds):
+Quick smoke before the real run (validates setup in seconds — the run takes
+`--duration` because of pacing):
 
 ```bash
-php tests/scripts/soak.php --total=1000 --duration=60 --concurrency=16
+php tests/scripts/soak.php --total=200 --duration=5 --concurrency=16
 ```
 
 The driver prints a one-line progress update to stderr every minute and at
@@ -148,6 +151,32 @@ curl -s http://127.0.0.1:8787/readyz         # {"status":"ready",...}
 
 Record: the three responses + whether the worker process id is unchanged
 (`cat runtime/webman.pid`, compare to the previous day's).
+
+### 1f. Deterministic MySQL reconnect check
+
+The overnight-idle check above only exercises reconnect if MySQL actually
+closed the connection during the idle window (the server's `wait_timeout` is
+8 h, so a one-night idle does NOT). To exercise the reconnect path
+deterministically — kill the worker's live MySQL connection and verify the
+FIRST request reconnects cleanly (plan §13.4.2: no "MySQL server has gone
+away" on the first request) — the soak driver has a dedicated step:
+
+```bash
+# Same running worker as §1a (no restart). Kills the worker's MySQL
+# connection server-side, then immediately GETs /db/version:
+php tests/scripts/soak.php --base=http://127.0.0.1:8787 --reconnect-check
+# -> mysql_reconnect_after_kill PASS; exit 0. Non-zero exit on failure.
+```
+
+It can also be run as a pre-check before the long soak:
+
+```bash
+php tests/scripts/soak.php --base=http://127.0.0.1:8787 --reconnect-check --total=100000 --duration=3600
+```
+
+The regression gate covers the same contract automatically:
+`api/tests/Integration/DbReconnectTest.php` (kill worker connection + assert
+first `/db/version` is 200) runs in the default integration suite.
 
 ## 2. Manual P0.6.4 drill — Dragonfly restart mid-consume
 

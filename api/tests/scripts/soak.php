@@ -21,8 +21,20 @@ declare(strict_types=1);
  *   php start.php start                              # terminal 1: the app
  *   php tests/scripts/soak.php --base=http://127.0.0.1:8787
  *
+ * Pacing: --duration is a RATE LIMITER, not a deadline — --total requests are
+ * spread across the whole window (rate = total/duration), so the documented
+ * 100k-over-1h command really takes ~1h (was Finding C: it exhausted in ~15 s
+ * locally).
+ *
+ * Reconnect pre-check (plan §13.4.2 / soak Finding A):
+ *   php tests/scripts/soak.php --reconnect-check
+ * Kills the worker's live MySQL connection server-side and verifies the NEXT
+ * /db/version request reconnects cleanly (200, not 500). Run it before the
+ * long soak; the check aborts (non-zero exit) when the reconnect path is
+ * broken.
+ *
  * Quick smoke (validate the setup before the real run):
- *   php tests/scripts/soak.php --total=1000 --duration=60 --concurrency=16
+ *   php tests/scripts/soak.php --total=200 --duration=5 --concurrency=16
  */
 
 require __DIR__ . '/../../vendor/autoload.php';
@@ -32,8 +44,9 @@ use GuzzleHttp\Pool;
 
 $args = [];
 foreach (array_slice($argv, 1) as $arg) {
-    if (preg_match('/^--([a-z-]+)=(.*)$/', $arg, $m)) {
-        $args[$m[1]] = $m[2];
+    // --key=value and bare --flag (flag value becomes '1').
+    if (preg_match('/^--([a-z-]+)(?:=(.*))?$/', $arg, $m)) {
+        $args[$m[1]] = $m[2] ?? '1';
     }
 }
 
@@ -43,11 +56,16 @@ $concurrency = (int) ($args['concurrency'] ?? 16);
 $base = $args['base'] ?? 'http://127.0.0.1:8787';
 $masterPidArg = isset($args['pid']) ? (int) $args['pid'] : 0;
 $summaryPath = $args['summary'] ?? '/tmp/kq-soak-summary-' . getmypid() . '.json';
+$runReconnectCheck = isset($args['reconnect-check']);
 $routes = ['/', '/healthz', '/readyz', '/db/version', '/cache/now'];
 
 if ($total <= 0 || $duration <= 0 || $concurrency <= 0) {
     throw new \RuntimeException('--total/--duration/--concurrency must be positive integers');
 }
+
+// Pacing target (Finding C): --duration is a rate limiter. Request i goes out
+// no earlier than startTime + i/rate, so --total requests fill the window.
+$ratePerSecond = $total / $duration;
 
 $client = new Client([
     'base_uri' => $base,
@@ -55,6 +73,58 @@ $client = new Client([
     'connect_timeout' => 2,
     'http_errors' => false,
 ]);
+
+/**
+ * Reconnect expectation (plan §13.4.2 / Finding A): kill the worker's live
+ * MySQL connection server-side and verify the FIRST /db/version request
+ * reconnects cleanly instead of 500ing with "MySQL server has gone away".
+ * The admin PDO connects without a default database, so its processlist row
+ * (DB = NULL) is never matched and we never kill ourselves.
+ */
+$runReconnectCheckFn = static function (Client $client): array {
+    $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
+    $dbPort = getenv('DB_PORT') ?: '3306';
+    $dbUser = getenv('DB_USERNAME') ?: 'root';
+    $dbPass = getenv('DB_PASSWORD') ?: '';
+    $dbName = getenv('DB_DATABASE') ?: 'keyquest';
+
+    $pdo = new PDO("mysql:host=$dbHost;port=$dbPort", $dbUser, $dbPass, [PDO::ATTR_TIMEOUT => 2]);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $appConnectionIds = static function () use ($pdo, $dbName, $dbUser): array {
+        return $pdo->query(
+            'SELECT ID FROM information_schema.processlist'
+            . ' WHERE DB = ' . $pdo->quote($dbName)
+            . ' AND USER = ' . $pdo->quote($dbUser)
+        )->fetchAll(PDO::FETCH_COLUMN);
+    };
+
+    $ids = $appConnectionIds();
+    if ($ids === []) {
+        // A freshly started worker (or one right after a reconnect) may not
+        // hold a live connection yet — warm it, then kill it.
+        $client->get('/db/version');
+        $ids = $appConnectionIds();
+    }
+    if ($ids === []) {
+        return ['ok' => false, 'detail' => 'no app MySQL connection in processlist to kill'];
+    }
+
+    foreach ($ids as $id) {
+        $pdo->exec('KILL ' . (int) $id);
+    }
+
+    usleep(100_000);
+    $response = $client->get('/db/version');
+    $status = $response->getStatusCode();
+    $body = json_decode((string) $response->getBody(), true);
+    $ok = $status === 200 && isset($body['db_version']);
+
+    return [
+        'ok' => $ok,
+        'detail' => sprintf('killed %d app connection(s); first GET /db/version -> %d', count($ids), $status),
+    ];
+};
 
 $startTime = microtime(true);
 $deadline = $startTime + $duration;
@@ -111,18 +181,29 @@ $record = static function (int $bucketIndex, float $latencyMs) use (&$buckets): 
     $buckets[$bucketIndex]['rss_kb'] = $buckets[$bucketIndex]['rss_kb'] ?? null;
 };
 
-$requests = function () use ($client, $routes, $total, $deadline, $concurrency, &$starts, &$done, &$buckets, &$bleedMismatches, $startTime, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record): \Generator {
+$requests = function () use ($client, $routes, $total, $deadline, $concurrency, $ratePerSecond, &$starts, &$done, &$buckets, &$bleedMismatches, $startTime, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record): \Generator {
     $sent = 0;
     while ($sent < $total && microtime(true) < $deadline) {
         $i = $sent++;
+        // Pacing: request i may not leave before its scheduled slot, so
+        // --total requests are spread across --duration (rate limiter, not
+        // deadline). Never block the loop for more than 1 s per iteration.
+        $scheduledAt = $startTime + $i / $ratePerSecond;
+        $waitUs = (int) (($scheduledAt - microtime(true)) * 1_000_000);
+        if ($waitUs > 0) {
+            usleep(min($waitUs, 1_000_000));
+            if (microtime(true) >= $deadline) {
+                break;
+            }
+        }
         $route = $routes[$i % count($routes)];
         $id = 'kq-soak-' . $i . '-' . bin2hex(random_bytes(3));
-        yield $id => function () use ($client, $route, $id, $startTime, &$starts, &$done, &$buckets, &$bleedMismatches, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record) {
+        yield $id => function () use ($client, $route, $id, $startTime, &$starts, &$done, &$buckets, &$bleedMismatches, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record, $total) {
             $starts[$id] = microtime(true);
             $promise = $client->getAsync($route, ['headers' => ['X-Request-Id' => $id]]);
 
             return $promise->then(
-                function ($response) use ($id, $startTime, &$starts, &$done, &$buckets, &$bleedMismatches, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record): void {
+                function ($response) use ($id, $startTime, &$starts, &$done, &$buckets, &$bleedMismatches, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record, $total): void {
                     $latencyMs = (microtime(true) - $starts[$id]) * 1000;
                     $bucket = (int) floor((microtime(true) - $startTime) / 60);
                     $record($bucket, $latencyMs);
@@ -131,22 +212,25 @@ $requests = function () use ($client, $routes, $total, $deadline, $concurrency, 
                     }
                     $done++;
                     $now = microtime(true);
+                    // RSS sampling is independent of the progress line so a
+                    // progress failure cannot silently drop the series
+                    // (Finding D: pre-fix it ran only in minute 1).
+                    if ($now >= $nextRssSampleAt) {
+                        $nextRssSampleAt = $now + 60;
+                        $rss = $workerRssKb();
+                        if ($rss !== null) {
+                            $rssBucket = (int) floor(($now - $startTime) / 60);
+                            $buckets[$rssBucket]['rss_kb'] = $rss;
+                        }
+                    }
                     if ($now >= $nextProgressAt) {
                         $nextProgressAt = $now + 60;
-                        $bucketCount = $buckets[$bucket]['count'] ?? 0;
                         $bucketErrors = $buckets[$bucket]['errors'] ?? 0;
                         fwrite(STDERR, sprintf(
                             "soak: t=%ds done=%d (%.1f%%) rps=%.1f err=%d bleed=%d\n",
                             (int) ($now - $startTime), $done, $done / $total * 100,
                             $done / ($now - $startTime), $bucketErrors, $bleedMismatches
                         ));
-                    }
-                    if ($now >= $nextRssSampleAt) {
-                        $nextRssSampleAt = $now + 60;
-                        $rss = $workerRssKb();
-                        if ($rss !== null) {
-                            $buckets[$bucket]['rss_kb'] = $rss;
-                        }
                     }
                 },
                 function ($reason) use ($id, $startTime, &$done, &$buckets, &$bleedMismatches, $record): void {
@@ -163,6 +247,29 @@ $requests = function () use ($client, $routes, $total, $deadline, $concurrency, 
         };
     }
 };
+
+$reconnectCheckResult = null;
+if ($runReconnectCheck) {
+    fwrite(STDERR, "soak: reconnect-check: killing the worker's MySQL connection...\n");
+    $reconnectCheckResult = $runReconnectCheckFn($client);
+    printf(
+        "%-45s %s\n",
+        'mysql_reconnect_after_kill',
+        $reconnectCheckResult['ok'] ? 'PASS' : 'FAIL'
+    );
+    fwrite(STDERR, 'soak: reconnect-check: ' . $reconnectCheckResult['detail'] . "\n");
+    if (!$reconnectCheckResult['ok']) {
+        throw new \RuntimeException('reconnect-check FAILED: ' . $reconnectCheckResult['detail']);
+    }
+    // Standalone mode: with only --reconnect-check (no explicit --total or
+    // --duration) the check IS the run — no soak follows.
+    if (!isset($args['total']) && !isset($args['duration'])) {
+        echo "\n== P0.6.3 reconnect check (standalone) ==\n";
+        echo "PASS — the first request after a MySQL kill reconnects cleanly\n";
+
+        return;
+    }
+}
 
 $pool = new Pool($client, $requests(), ['concurrency' => $concurrency]);
 $pool->promise()->wait();
@@ -223,6 +330,7 @@ $verdicts = [
     'p99_last_within_10pct_of_minute_one' => $p99Within10pct,
     'zero_bleed_mismatches' => $bleedMismatches === 0,
     'worker_alive_at_end' => $workerAlive,
+    'mysql_reconnect_after_kill' => $reconnectCheckResult['ok'] ?? null,
 ];
 
 $summary = [
@@ -235,6 +343,7 @@ $summary = [
     'rss_first_kb' => $firstRss,
     'rss_last_kb' => $lastRss,
     'rss_growth_kb' => $rssGrowthKb,
+    'reconnect_check' => $reconnectCheckResult,
     'first_minute_p99_ms' => $firstP99,
     'last_minute_p99_ms' => $lastP99,
     'per_minute' => array_values($table),
