@@ -2659,6 +2659,18 @@ real reason the educator is the first hire, not the last.
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
 
+### 2026-08-22 (late) — P0.5 renderer prototype + P0.3.3-partial + soak/drill + MySQL reconnect fix + P0.9 gate draft
+**Commits:** `15af47f` + `d23985b` (P0.5) → `b7b44c8` + `e2ad357` + `7ac461b` (P0.3.3-partial) → `49c143b` (soak/drill results) → `840d566` + `47c92a0` (P0.9 gate draft + revision) → `43ee9a1` (MySQL reconnect fix).
+**What shipped:**
+- P0.5 code complete: Compose Canvas scrolling-notation prototype — NoteBar + Staff skins, Bravura 1.481 (OFL) hybrid glyphs, stress score 240 notes w/ ties, JankStats (metrics-performance 1.0.0), zero-alloc per-frame draw (review-fixed), 32 JVM tests. Device measurement (≥58fps on mid-ranger) pending hardware; P0.5.4 probe runbook written.
+- P0.3.3-partial: engine YIN baseline CLI (yin_cli, WavReader promoted to engine_core) + EngineYinWrapper (F1=1.0 synthetic); OAF TFLite BLOCKED (no published artifact; tflite-runtime no cp312 wheels); Basic Pitch BLOCKED (TF pin). Review-fixed: SIGFPE guard, merge threshold, subprocess timeout, CI wrapper test.
+- P0.6.3 soak + P0.6.4 drill COMPLETE: 23.4M req/1h @6510 rps, 0 errors/0 bleed/0 kB RSS growth/p99 stable; Dragonfly restart mid-consume no job loss. GATE DEFECT found: MySQL connection drop → 500 until ~50s heartbeat (§13.4.2 expectation NOT MET).
+- MySQL reconnect FIXED (43ee9a1): ReconnectingDatabaseManager subclass + app support\Db shadow (PSR-4), DbReconnectTest regression, soak-driver pacing/RSS fixes. phpunit 23/113.
+- P0.9 gate review DRAFT (docs/phase-gates/): GO-WITH-CUTS recommendation; 1 MET / 3 PARTIAL / 1 PENDING / 4 BLOCKED / 2 NOT STARTED; hardware-free Phase-1 tracks identified (SongPack v1, pipeline CLI v0, scoring engine).
+**Environment:** unchanged (new server; host-network DB containers; docker compose still broken at daemon level).
+**CI:** green on all pushed commits (remote runs verified via gh).
+**Next:** device hardware (5 phones, DGX-520, MIDI keyboards) for P0.2.4/P0.3.4/P0.4/P0.7 + P0.5.3; rights vetting (P0.8); then Phase-1 hardware-free tracks (P1.1 SongPack spec, P1.2 pipeline CLI, P1.5 scoring engine) and FINAL P0.9 re-issue once hardware + rights land.
+
 ### 2026-08-22 — P0.2 (A3+B) + P0.6-C + P0.3.1: pitch harness green, Oboe/JNI wired, load baseline + ADR-0002, eval harness + critical fix
 **Commits:** `00366b9` (P0.2-A3 harness) → `8f862e3` (A3 review fixes) → `84c0f2d` + `2eee95b` (P0.6-C) → `0c49086` (P0.6-C minors) → `4f33c20` (P0.3.1 harness) → `a1a30a2` (pitch-tolerance critical fix) → `8969787` (P0.2-B Oboe/JNI).
 **What shipped:**
