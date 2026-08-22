@@ -16,6 +16,10 @@ dependencies = [
     "jsonschema>=4,<5",
     "pydantic>=2,<3",
     "PyYAML>=6,<7",
+    "mir_eval>=0.7,<1",
+    "soundfile>=0.12,<1",
+    "pretty_midi>=0.2.10,<1",
+    "librosa>=0.10,<1",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +28,9 @@ dev = [
     "hypothesis>=6,<7",
     "ruff>=0.5,<1",
 ]
+
+[project.scripts]
+pipeline = "pipeline.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["pipeline*"]

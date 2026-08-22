@@ -27,6 +27,62 @@ pipeline batch    --manifest weekly-batch.yaml --parallel 4
 
 Stage dispatch lands in P1; `pipeline --help` already exposes the surface.
 
+## Evaluation harness (plan §20 P0.3.1)
+
+Offline evaluation for pitch-tracking / transcription models: takes
+(audio file, aligned ground-truth MIDI) pairs plus any model wrapper and emits
+note-level precision/recall/F1 (mir_eval conventions), the onset timing error
+distribution, chord recall by chord size, and the octave-error rate.
+
+```bash
+# score the pyin floor (monophonic baseline, plan §5.3) on one pair
+pipeline eval audio.wav ground_truth.mid --wrapper pyin --json /tmp/out.json
+
+# prove the plumbing: the ground-truth oracle must score perfectly
+pipeline eval audio.wav ground_truth.mid --wrapper ground-truth
+```
+
+Tolerances: `--onset-tol 0.05` (seconds), `--offset-tol 0.2` (mir_eval's
+`offset_ratio` — a *fraction of the reference note duration*, not seconds),
+pitch tolerance 0.5 semitones (applied as a scalar Hz window around A4).
+Notes are `(N, 3)` arrays `[onset_sec, offset_sec, midi_pitch]`; MIDI is
+converted to Hz at the mir_eval boundary. Metrics are defined exactly in
+`pipeline/eval/metrics.py`.
+
+Python API: `evaluate_pair(audio, midi, wrapper, MetricConfig())` and
+`evaluate_corpus(pairs, wrapper, config)` (micro-averaged notes, pooled onset
+errors, pooled chord recall, pooled octave-error rate). Wrappers live in
+`pipeline/eval/model_wrappers.py`: `GroundTruthWrapper`, `PyinBaselineWrapper`
+(librosa.pyin, numpy-YIN fallback), `BasicPitchWrapper` (optional).
+
+### Validation result (the P0.3.1 acceptance step)
+
+Published target: Spotify Basic Pitch — note F1 ≈ 0.82, onset error ≈ 0.052 s
+on MAESTRO ("A Lightweight and Real-Time ... Basic Pitch").
+
+- **Metric correctness: PASS.** The harness reproduces mir_eval's own
+  unit-test reference values exactly (10 transcription fixtures committed
+  under `tests/data/mir_eval/`, F1/P/R to 1e-9), and the synthetic self-tests
+  score the ground-truth oracle at F1 = 1.0 / zero onset error / zero octave
+  error and the pyin floor at F1 = 1.0 (actual, on a clean 10-note synthetic
+  melody; threshold is 0.8). See `tests/test_eval_harness.py` (all offline,
+  ~3 s).
+- **Published-number comparison: BLOCKED on two independent fronts.** The
+  harness and the validation runner (`python -m pipeline.eval.validate_maestro`)
+  are complete and will perform the comparison the moment both lift:
+  1. **basic-pitch cannot install on Python 3.12.** basic-pitch 0.4.0 pins
+     `tensorflow>=2.4.1,<2.15.1`; tensorflow 2.15 ships no cp312 wheels (the
+     earliest 3.12 build is 2.16), so pip has no satisfiable resolution.
+     Workaround: run the comparison in a Python < 3.12 venv.
+  2. **MAESTRO audio is not individually downloadable.** The magentadata GCS
+     bucket stores no individual wav objects for v3.0.0 or v2.0.0 (verified
+     via `storage/v1/b/magentadata/o` — only the 65–96 GB aggregated
+     `maestro-vX.Y.Z.zip` files and tfrecords). URL patterns tried, all HTTP
+     404: `https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/<audio_filename>`
+     and the v2.0.0 equivalent.
+- Until the blockers lift, calibration rests on the mir_eval fixture check and
+  the bake-off task (P0.3.3) provides runnable published baselines.
+
 ## Determinism (§8.2.10)
 
 Output must be byte-identical for identical input, so content diffs mean
