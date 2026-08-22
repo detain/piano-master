@@ -2659,6 +2659,17 @@ real reason the educator is the first hire, not the last.
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
 
+### 2026-08-22 — P0.2 (A3+B) + P0.6-C + P0.3.1: pitch harness green, Oboe/JNI wired, load baseline + ADR-0002, eval harness + critical fix
+**Commits:** `00366b9` (P0.2-A3 harness) → `8f862e3` (A3 review fixes) → `84c0f2d` + `2eee95b` (P0.6-C) → `0c49086` (P0.6-C minors) → `4f33c20` (P0.3.1 harness) → `a1a30a2` (pitch-tolerance critical fix) → `8969787` (P0.2-B Oboe/JNI).
+**What shipped:**
+- P0.2-A3 complete: deterministic fixture generator + full A0–C8 pitch suite (88/88 correct, 0 octave errors, C8 edge check, boundary-honesty negatives, floor-pin MIDI 32–42). Finding: standard 2048 resolves F1/F#1 via extrapolation past the nominal 46.9 Hz boundary; reliable floor ~G#1; YinDetector.h contract corrected; detector logic untouched. Debug+Release ctest green, -Werror.
+- P0.2-B code complete: OboeInput (exclusive LowLatency, ring-push-only callback, granted-property logging, drop counter), NoteEventQueue (lock-free SPSC), JNI bridge → Kotlin Flow, RECORD_AUDIO, NDK/prefab wiring (libkeyquest_engine.so, 4 ABIs, oboe 1.9.3). assembleDebug + testDebugUnitTest green; engine host tests green. Device-side verification (granted-mode table, soak, latency rig) pending the 5 test phones.
+- P0.6-C complete: k6 load baseline (cached reads 31–35k req/s MET ~6x; auth writes 370 req/s NOT MET — MySQL commit-fsync bottleneck on /dev/md0; async-fsync toggle → 8.8k req/s), reload + Dragonfly failover drills (0 errors across 2M/1.8M requests, degraded-200 + auto-recovery ~5s), ADR-0002 coroutine posture (OFF for HTTP workers / ON for consumer outbound fan-out; WaitGroup+Channel deadlock → Workerman\Coroutine\Parallel). CacheGuard degradation + CacheDegradationTest (+3). phpunit 21/106.
+- P0.3.1 complete: mir_eval harness + `pipeline eval` CLI + self-tests; critical pitch-tolerance fix (Hz→cents, 50¢ default) with +30¢ regression test; metric calibration proven vs mir_eval fixtures (1e-9); MAESTRO published-number comparison blocked (basic-pitch TF pin, no cp312; MAESTRO audio not individually downloadable) — validate_maestro.py re-runs when unblocked.
+**Environment (new server):** Ubuntu 24.04.4, 64-core/251 GB. Fixed: cmake/cpack/ctest broken pip shims, NDK r27d + build-tools 35/36, k6 v2.2.0, MySQL/Dragonfly images pulled, pipeline venv = Python 3.12.12. **Docker bridge networking broken (root-only fix)** — DBs run via host-network containers; `docker compose up` unusable on this box.
+**CI:** all commits pushed to origin/master; local make lint/test green on every commit (remote CI runs on push).
+**Next:** P0.2-B review → P0.5 notation renderer → P0.3 bake-off (engine YIN CLI + OAF TFLite attempt; Basic Pitch blocked) → P0.9 gate review (needs soak drill, rights vetting, hardware).
+
 ### 2026-08-21 — P0.1 + P0.2 (partial) + P0.6 (partial): monorepo green, CI passing
 **Commits:** `612e70f` (initial) → `246b2b2` (P0.1 scaffold) → `deaadbf` + `99538ee` (P0.6.1 Webman skeleton + review fixes) → `3ae0045` (engine core part 1) → `a16ca23` + `e78c657` (YIN core + review fixes) → `71574a3` + `a4b4fde` (P0.6.2-4 test suites + review fixes) → `4fe5a35` (Vite 6→8.2.2) → `d6253fe` → `1544284` → `3d8584a` (CI fixes) → `3c2847a` (provisioning).
 **What shipped:**
