@@ -58,6 +58,15 @@ def _add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
         ),
     )
     parser.add_argument(
+        "--pitch-tol-cents",
+        type=float,
+        default=50.0,
+        help=(
+            "pitch matching tolerance in cents (mir_eval's unit; "
+            "50 cents = 0.5 semitone, default: 50.0)"
+        ),
+    )
+    parser.add_argument(
         "--sr",
         type=int,
         default=22050,
@@ -96,7 +105,11 @@ def _run_eval(args: argparse.Namespace) -> NoReturn:
     from pipeline.eval.model_wrappers import GroundTruthWrapper, PyinBaselineWrapper
     from pipeline.eval.run import evaluate_pair
 
-    config = MetricConfig(onset_tol=args.onset_tol, offset_tol=args.offset_tol)
+    config = MetricConfig(
+        onset_tol=args.onset_tol,
+        offset_tol=args.offset_tol,
+        pitch_tol_semitones=args.pitch_tol_cents / 100.0,
+    )
     if args.wrapper == "ground-truth":
         wrapper = GroundTruthWrapper(args.midi)
     else:

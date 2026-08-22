@@ -23,7 +23,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pipeline.eval.metrics import MetricConfig, note_precision_recall_f1_hz
+from pipeline.eval.metrics import (
+    MetricConfig,
+    note_confusion_counts,
+    note_precision_recall_f1_hz,
+)
 from pipeline.eval.model_wrappers import GroundTruthWrapper, PyinBaselineWrapper
 from pipeline.eval.run import evaluate_corpus, evaluate_pair
 from pipeline.eval.synth import make_clean_melody, synthesize_melody
@@ -93,6 +97,25 @@ def test_corrupted_wrapper_is_discriminated(synthetic_pair: tuple[str, str]) -> 
     assert result["octave_error_rate"] > 0.9
     assert result["pitch_class_matched"] == 10
     assert result["octave_errors"] == 10
+
+
+def test_pitch_tolerance_is_in_cents() -> None:
+    """A +30-cent pitch shift still matches at ``pitch_tol_semitones=0.5``.
+
+    mir_eval computes pitch distance in cents (``1200 * log2(ref/est)``) and
+    compares it directly against ``pitch_tolerance``. The harness must pass the
+    tolerance in cents (50.0 = 0.5 semitone); the pre-fix bug passed a scalar
+    Hz window (~12.89), shrinking the effective window to ~0.13 semitones and
+    breaking this match.
+    """
+    ref = np.array([[0.0, 0.5, 60.0], [1.0, 1.5, 62.0], [2.0, 2.5, 64.0]])
+    est = ref.copy()
+    est[1, 2] += 0.3  # +30 cents = +0.3 semitone shift in frequency
+
+    tp, fp, fn = note_confusion_counts(ref, est, CONFIG)
+    assert tp == len(ref), f"expected all {len(ref)} notes to match, got tp={tp}"
+    assert fp == 0
+    assert fn == 0
 
 
 def test_mir_eval_fixture_calibration() -> None:

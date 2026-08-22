@@ -10,12 +10,14 @@ Metric definitions
 ------------------
 - Note precision/recall/F1: ``mir_eval.transcription.precision_recall_f1_overlap``
   (a note matches when onset is within ``onset_tol`` seconds, pitch within
-  ``pitch_tol_semitones``, and offset within ``offset_tol`` *fraction of the
-  reference note's duration* -- mir_eval's ``offset_ratio``, not seconds).
+  ``pitch_tol_semitones`` -- passed to mir_eval as ``pitch_tol_semitones * 100``
+  **cents**, because mir_eval measures pitch distance in cents (50 cents =
+  0.5 semitone, the classic convention) -- and offset within ``offset_tol``
+  *fraction of the reference note's duration* -- mir_eval's ``offset_ratio``,
+  not seconds).
 - Onset timing error: absolute ``ref - est`` onset difference for onsets
   matched by ``mir_eval.util.match_events`` within ``onset_tol`` (the same
-  matching the classic ``mir_eval.transcription_onset`` module used; that
-  module was dropped in mir_eval 0.8, so we reuse its matching convention).
+  matching primitive that ``mir_eval.onset.f_measure`` uses).
 - Chord recall by size: reference onsets are clustered into chords (notes
   starting within ``chord_cluster_tol`` of the chord's first onset); a chord
   of size ``k`` is recalled iff all ``k`` distinct pitches appear among the
@@ -36,8 +38,7 @@ import numpy as np
 # Note array layout: columns are (onset_sec, offset_sec, midi_pitch).
 _ONSET, _OFFSET, _PITCH = 0, 1, 2
 
-# Reference pitch used when converting a semitone tolerance to a scalar Hz
-# tolerance for mir_eval (MIDI 69 = A4 = 440 Hz).
+# A4 = MIDI 69 = 440 Hz: the reference for every MIDI -> Hz conversion.
 _REFERENCE_MIDI = 69.0
 
 
@@ -50,8 +51,10 @@ class MetricConfig:
     offset_tol: mir_eval's ``offset_ratio`` -- an estimated offset must land
         within this *fraction of the reference note's duration* of the
         reference offset. A ratio, not seconds; 0.2 is the classic default.
-    pitch_tol_semitones: how close a pitch must be (in semitones, applied as a
-        scalar Hz window around A4) to count as the same note.
+    pitch_tol_semitones: how close a pitch must be (in semitones) to count as
+        the same note. Applied at the mir_eval boundary as cents (x100):
+        mir_eval measures pitch distance in cents, so 0.5 semitones = 50 cents,
+        the classic transcription convention.
     chord_cluster_tol: seconds; reference onsets within this of a chord's
         first onset join that chord.
     chord_window: seconds; estimated notes with onsets within ±this of a
@@ -121,13 +124,6 @@ def _notes_to_hz(notes: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return intervals, pitches_hz
 
 
-def _pitch_tolerance_hz(config: MetricConfig) -> float:
-    """Scalar Hz window representing ``pitch_tol_semitones`` at A4."""
-    return midi_to_hz(_REFERENCE_MIDI + config.pitch_tol_semitones) - midi_to_hz(
-        _REFERENCE_MIDI
-    )
-
-
 def _require_note_array(notes: np.ndarray, label: str) -> None:
     """Fail fast: a note array must be (N, 3) with the canonical columns."""
     if notes.ndim != 2 or notes.shape[1] != 3:
@@ -161,7 +157,7 @@ def note_precision_recall_f1_hz(
         est_hz[:, _PITCH],
         onset_tolerance=config.onset_tol,
         offset_ratio=config.offset_tol,
-        pitch_tolerance=_pitch_tolerance_hz(config),
+        pitch_tolerance=config.pitch_tol_semitones * 100.0,
     )
     return float(precision), float(recall), float(f1)
 
@@ -181,7 +177,7 @@ def note_precision_recall_f1(
         est_hz,
         onset_tolerance=config.onset_tol,
         offset_ratio=config.offset_tol,
-        pitch_tolerance=_pitch_tolerance_hz(config),
+        pitch_tolerance=config.pitch_tol_semitones * 100.0,
     )
     return float(precision), float(recall), float(f1)
 
@@ -205,7 +201,7 @@ def note_confusion_counts(
         est_hz,
         onset_tolerance=config.onset_tol,
         offset_ratio=config.offset_tol,
-        pitch_tolerance=_pitch_tolerance_hz(config),
+        pitch_tolerance=config.pitch_tol_semitones * 100.0,
     )
     true_positives = len(matching)
     return (
@@ -220,7 +216,7 @@ def note_confusion_counts(
 # ---------------------------------------------------------------------------
 
 
-def _onset_errors(
+def onset_errors(
     ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
 ) -> np.ndarray:
     """Absolute onset errors (seconds) for onsets matched within ``onset_tol``."""
@@ -234,7 +230,7 @@ def _onset_errors(
     return np.abs(ref_notes[ref_idx, _ONSET] - est_notes[est_idx, _ONSET])
 
 
-def _percentile(errors: np.ndarray, q: float) -> float:
+def percentile(errors: np.ndarray, q: float) -> float:
     """A single percentile; 0.0 when there are no matched onsets."""
     if errors.size == 0:
         return 0.0
@@ -245,11 +241,11 @@ def onset_error_summary(
     ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
 ) -> dict[str, float]:
     """Median / p95 / p99 of the absolute onset timing error (seconds)."""
-    errors = _onset_errors(ref_notes, est_notes, config)
+    errors = onset_errors(ref_notes, est_notes, config)
     return {
-        "median": _percentile(errors, 50),
-        "p95": _percentile(errors, 95),
-        "p99": _percentile(errors, 99),
+        "median": percentile(errors, 50),
+        "p95": percentile(errors, 95),
+        "p99": percentile(errors, 99),
     }
 
 
@@ -279,7 +275,7 @@ def _cluster_reference_chords(
     return chords
 
 
-def _chord_recall_counts(
+def chord_recall_counts(
     ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
 ) -> dict[int, tuple[int, int]]:
     """Per chord size: ``(recalled_chords, total_chords)`` in the reference."""
@@ -306,7 +302,7 @@ def chord_recall_by_size(
     """Chord recall grouped by chord size: ``{size: fraction_recalled}``."""
     return {
         size: recalled / total if total else 0.0
-        for size, (recalled, total) in _chord_recall_counts(ref_notes, est_notes, config).items()
+        for size, (recalled, total) in chord_recall_counts(ref_notes, est_notes, config).items()
     }
 
 
@@ -315,7 +311,7 @@ def chord_recall_by_size(
 # ---------------------------------------------------------------------------
 
 
-def _octave_error_counts(
+def octave_error_counts(
     ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
 ) -> tuple[int, int]:
     """Count ``(octave_errors, pitch_class_matched)`` estimated notes.
@@ -355,7 +351,7 @@ def octave_error_rate(
     ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
 ) -> float:
     """Fraction of correctly-pitch-class estimated notes whose octave is wrong."""
-    octave_errors, pitch_class_matched = _octave_error_counts(
+    octave_errors, pitch_class_matched = octave_error_counts(
         ref_notes, est_notes, config
     )
     if pitch_class_matched == 0:

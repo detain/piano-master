@@ -15,16 +15,16 @@ import numpy as np
 
 from pipeline.eval.metrics import (
     MetricConfig,
-    _chord_recall_counts,
-    _octave_error_counts,
-    _onset_errors,
-    _percentile,
     chord_recall_by_size,
+    chord_recall_counts,
     load_midi_notes,
     note_confusion_counts,
     note_precision_recall_f1,
+    octave_error_counts,
     octave_error_rate,
     onset_error_summary,
+    onset_errors,
+    percentile,
 )
 from pipeline.eval.model_wrappers import ModelWrapper
 
@@ -50,15 +50,15 @@ def evaluate_pair_raw(
 ) -> EvalRaw:
     """Raw metric primitives for one note-estimate vs its ground truth."""
     tp, fp, fn = note_confusion_counts(ref_notes, est_notes, config)
-    octave_errors, pitch_class_matched = _octave_error_counts(
+    octave_errors, pitch_class_matched = octave_error_counts(
         ref_notes, est_notes, config
     )
     return EvalRaw(
         tp=tp,
         fp=fp,
         fn=fn,
-        onset_errors=_onset_errors(ref_notes, est_notes, config),
-        chord_counts=_chord_recall_counts(ref_notes, est_notes, config),
+        onset_errors=onset_errors(ref_notes, est_notes, config),
+        chord_counts=chord_recall_counts(ref_notes, est_notes, config),
         octave_errors=octave_errors,
         pitch_class_matched=pitch_class_matched,
     )
@@ -182,9 +182,9 @@ def evaluate_corpus(
         "onset_error_mean": (
             float(np.mean(all_onset_errors)) if all_onset_errors.size else 0.0
         ),
-        "onset_error_median": _percentile(all_onset_errors, 50),
-        "onset_error_p95": _percentile(all_onset_errors, 95),
-        "onset_error_p99": _percentile(all_onset_errors, 99),
+        "onset_error_median": percentile(all_onset_errors, 50),
+        "onset_error_p95": percentile(all_onset_errors, 95),
+        "onset_error_p99": percentile(all_onset_errors, 99),
         "chord_recall_by_size": chord_recall,
         "octave_error_rate": octave_rate,
         "total_ref_notes": sum(pair["ref_note_count"] for pair in per_pair),

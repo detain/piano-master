@@ -44,10 +44,10 @@ pipeline eval audio.wav ground_truth.mid --wrapper ground-truth
 
 Tolerances: `--onset-tol 0.05` (seconds), `--offset-tol 0.2` (mir_eval's
 `offset_ratio` — a *fraction of the reference note duration*, not seconds),
-pitch tolerance 0.5 semitones (applied as a scalar Hz window around A4).
-Notes are `(N, 3)` arrays `[onset_sec, offset_sec, midi_pitch]`; MIDI is
-converted to Hz at the mir_eval boundary. Metrics are defined exactly in
-`pipeline/eval/metrics.py`.
+`--pitch-tol-cents 50.0` (mir_eval measures pitch distance in **cents**;
+50 cents = 0.5 semitone). Notes are `(N, 3)` arrays
+`[onset_sec, offset_sec, midi_pitch]`; MIDI is converted to Hz at the mir_eval
+boundary. Metrics are defined exactly in `pipeline/eval/metrics.py`.
 
 Python API: `evaluate_pair(audio, midi, wrapper, MetricConfig())` and
 `evaluate_corpus(pairs, wrapper, config)` (micro-averaged notes, pooled onset
@@ -59,6 +59,12 @@ errors, pooled chord recall, pooled octave-error rate). Wrappers live in
 
 Published target: Spotify Basic Pitch — note F1 ≈ 0.82, onset error ≈ 0.052 s
 on MAESTRO ("A Lightweight and Real-Time ... Basic Pitch").
+
+- **Onset-error convention: to confirm.** The 0.052 s comparison uses the
+  harness's mean absolute onset error over onset-matched events, but the
+  paper's exact convention (all-notes vs matched-notes, mean vs median) could
+  not be verified. Re-check before unblocking the comparison
+  (`pipeline/eval/validate_maestro.py`).
 
 - **Metric correctness: PASS.** The harness reproduces mir_eval's own
   unit-test reference values exactly (10 transcription fixtures committed

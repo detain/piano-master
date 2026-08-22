@@ -117,7 +117,10 @@ class PyinBaselineWrapper:
         try:
             times, f0 = self._pitch_track_librosa(y, sr)
             engine = "librosa.pyin"
-        except (ImportError, ValueError):
+        except ImportError:
+            # Fallback exists only for the case librosa is missing; genuine
+            # errors from librosa.pyin (bad audio, parameter conflicts) must
+            # propagate loudly instead of being masked by the numpy floor.
             times, f0 = self._pitch_track_yin(y, sr)
             engine = "numpy-yin"
         notes = _pitch_track_to_notes(

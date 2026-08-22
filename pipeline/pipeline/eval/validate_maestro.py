@@ -6,6 +6,7 @@ Spotify Basic Pitch, which reports note-level F1 ~0.82 and onset error
 ~0.052 s on MAESTRO ("A Lightweight and Real-Time ... Basic Pitch").
 
 Run:  python -m pipeline.eval.validate_maestro [--workdir DIR] [--limit N]
+      [--require-comparison]
 
 Two hard blockers are documented in pipeline/README.md and reported here:
 
@@ -53,6 +54,11 @@ AUDIO_URL_TEMPLATES = [
 
 # Spotify Basic Pitch published numbers on MAESTRO.
 PUBLISHED_NOTE_F1 = 0.8226
+# TODO(confirm): the paper reports onset error ~0.052 s, but its exact
+# convention (all-notes vs onset-matched events, mean vs median) could not be
+# verified. The harness compares mean absolute onset error over onset-matched
+# events; confirm the paper's convention matches before unblocking this
+# comparison (see pipeline/README.md).
 PUBLISHED_ONSET_ERROR = 0.052
 TOLERANCE = 0.02  # "within a couple of points"
 
@@ -222,6 +228,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--limit", type=int, default=8, help="max test-split pieces to score"
     )
+    parser.add_argument(
+        "--require-comparison",
+        action="store_true",
+        help=(
+            "exit non-zero when the published-number comparison is blocked "
+            "(default: exit 0 with BLOCKED diagnostics)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     print("==> 1/3 metric calibration against mir_eval unit-test fixtures")
@@ -263,6 +277,9 @@ def main(argv: list[str] | None = None) -> int:
         print("    Validation of the published number is blocked; the metric-level")
         print("    calibration above plus tests/test_eval_harness.py stand in until")
         print("    P0.3.3 bake-off models provide a runnable published baseline.")
+        if args.require_comparison:
+            print("!! --require-comparison set: blocked, exiting non-zero")
+            return 2
         return 0
 
     comparison = _run_published_comparison(args.workdir, midi_paths, subset)
