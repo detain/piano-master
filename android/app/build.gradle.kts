@@ -67,6 +67,7 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -75,6 +76,10 @@ dependencies {
 
     // Oboe input stream for the native audio engine (prefab CMake package).
     implementation(libs.oboe)
+
+    // JankStats (plan §20 P0.5.3): frame-over-24ms + dropped-frame instrumentation
+    // for the scrolling-notation prototype.
+    implementation(libs.androidx.metrics.performance)
 
     // Unit tests (JVM).
     testImplementation(libs.junit)
