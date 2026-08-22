@@ -11,8 +11,10 @@ The wrappers here form the P0.3.x baseline zoo:
   estimate. Every metric must score perfectly against it.
 - ``PyinBaselineWrapper`` -- the monophonic floor (plan §5.3). Primary engine
   is ``librosa.pyin``; a compact numpy-only textbook YIN backs it up when
-  librosa is unavailable. The engine's C++ YIN baseline plugs in here during
-  the P0.3.3 bake-off.
+  librosa is unavailable.
+- ``EngineYinWrapper``    -- the engine's C++ YIN baseline (P0.3.3): shells
+  out to the ``engine/tools/yin_cli`` host executable, which runs the same
+  streaming detector the app will use.
 - ``BasicPitchWrapper``   -- optional Spotify Basic Pitch, for the published
   MAESTRO calibration (F1 ~0.82). Requires ``basic-pitch`` (tensorflow); the
   import is lazy so the rest of the harness stays lightweight.
@@ -20,6 +22,11 @@ The wrappers here form the P0.3.x baseline zoo:
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -169,6 +176,158 @@ class PyinBaselineWrapper:
             self.frame_length,
             self.confidence_threshold,
         )
+
+
+# ---------------------------------------------------------------------------
+# Engine C++ YIN baseline (shells out to engine/tools/yin_cli)
+# ---------------------------------------------------------------------------
+
+
+def default_yin_cli_path() -> Path:
+    """Default ``yin_cli`` binary path: ``<repo-root>/engine/build/yin_cli``.
+
+    ``pipeline/`` sits three levels below the repo root, so the wrapper can
+    find the engine build without any configuration. ``KEYQUEST_YIN_CLI``
+    overrides it (see ``EngineYinWrapper``).
+    """
+    return Path(__file__).resolve().parents[3] / "engine" / "build" / "yin_cli"
+
+
+class EngineYinWrapper:
+    """Engine C++ YIN baseline for the P0.3.3 bake-off.
+
+    Shells out to ``engine/tools/yin_cli`` -- the host executable that runs
+    the engine's streaming YIN detector over a mono WAV and emits notes as
+    TSV or JSON -- so the harness scores the exact detector the app will use
+    (no re-implementation drift). Audio is read and resampled with the same
+    librosa path as ``PyinBaselineWrapper`` so the cross-model comparison is
+    apples-to-apples.
+
+    The binary path comes from ``KEYQUEST_YIN_CLI`` or defaults to
+    ``<repo-root>/engine/build/yin_cli``. A missing binary raises a
+    descriptive ``RuntimeError`` at construction -- fail fast, fail loud;
+    a silent empty estimate would poison a bake-off run.
+    """
+
+    name = "engine-yin"
+
+    def __init__(
+        self,
+        *,
+        window_size: int = 2048,
+        hop_size: int | None = None,
+        confidence: float = 0.8,
+        min_note_ms: float = 60.0,
+        binary: str | os.PathLike[str] | None = None,
+    ) -> None:
+        self.window_size = window_size
+        self.hop_size = hop_size
+        self.confidence = confidence
+        self.min_note_ms = min_note_ms
+        self.binary = self._resolve_binary(binary)
+        # In-process cache keyed by (audio path, mtime, sr, params): corpus
+        # runs re-score the same audio with the same settings repeatedly.
+        self._cache: dict[tuple, tuple[np.ndarray, dict]] = {}
+
+    @staticmethod
+    def _resolve_binary(
+        binary: str | os.PathLike[str] | None,
+    ) -> Path:
+        if binary is None:
+            binary = os.environ.get("KEYQUEST_YIN_CLI") or default_yin_cli_path()
+        resolved = Path(binary)
+        if not resolved.is_file():
+            raise RuntimeError(
+                f"yin_cli binary not found at {resolved}. Build it with "
+                "`cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release "
+                "&& cmake --build engine/build --target yin_cli`, or point "
+                "KEYQUEST_YIN_CLI at the built executable."
+            )
+        return resolved
+
+    def predict_notes(
+        self, audio_path: str, sr: int, config: MetricConfig
+    ) -> tuple[np.ndarray, dict]:
+        cache_key = self._cache_key(audio_path, sr)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        y, native_sr = sf.read(audio_path, always_2d=False, dtype="float32")
+        if y.ndim > 1:
+            y = y.mean(axis=1)
+        if native_sr != sr:
+            y = _resample(y, native_sr, sr)
+        notes, metadata = self._run_yin_cli(y, sr)
+        self._cache[cache_key] = (notes, metadata)
+        return notes, metadata
+
+    def _cache_key(self, audio_path: str, sr: int) -> tuple:
+        mtime = os.path.getmtime(audio_path)
+        return (
+            audio_path,
+            mtime,
+            sr,
+            self.window_size,
+            self.hop_size,
+            self.confidence,
+            self.min_note_ms,
+            str(self.binary),
+        )
+
+    def _run_yin_cli(self, y: np.ndarray, sr: int) -> tuple[np.ndarray, dict]:
+        """Run ``yin_cli`` on ``y`` at ``sr`` and parse its JSON note list."""
+        cmd = [
+            str(self.binary),
+            "--sr",
+            str(sr),
+            "--window",
+            str(self.window_size),
+            "--confidence",
+            str(self.confidence),
+            "--min-ms",
+            str(self.min_note_ms),
+            "--json",
+        ]
+        if self.hop_size is not None:
+            cmd += ["--hop", str(self.hop_size)]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            wav_path = os.path.join(tmp_dir, "input.wav")
+            sf.write(wav_path, y, sr)
+            result = subprocess.run(
+                cmd + [wav_path], capture_output=True, text=True, check=False
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"yin_cli failed (exit {result.returncode}) on {wav_path}: "
+                    f"{result.stderr.strip()}"
+                )
+            try:
+                events = json.loads(result.stdout)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    f"yin_cli produced unparseable JSON on {wav_path}: {exc}"
+                ) from exc
+
+        notes = np.asarray(
+            [[event["onset"], event["offset"], event["midi_pitch"]] for event in events],
+            dtype=float,
+        )
+        if notes.size == 0:
+            notes = np.zeros((0, 3))
+        metadata = {
+            "wrapper": self.name,
+            "engine": "engine-yin",
+            "binary": str(self.binary),
+            "sr": sr,
+            "window_size": self.window_size,
+            "hop_size": self.hop_size,
+            "confidence": self.confidence,
+            "min_note_ms": self.min_note_ms,
+            "n_notes": len(notes),
+        }
+        return notes, metadata
 
 
 def _resample(y: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:

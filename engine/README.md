@@ -19,10 +19,18 @@ engine/
     midi/MidiDecoder.cpp      # raw MIDI bytes → NoteEvent (also handles running status)
     synth/SoundFontSynth.cpp  # TinySoundFont piano for touch keyboard + note previews
     metronome/Metronome.cpp   # sample-accurate click scheduled on output callback
+    wav/WavReader.cpp         # read-only WAV decoder (host tooling: yin_cli, P1.3.5 harness)
     Engine.cpp                # lifecycle, config, event queue to JNI
   include/engine/NoteEvent.h
+  tools/yin_cli.cpp           # host CLI: YIN detector over a WAV → notes (P0.3.3 bake-off)
   test/                       # offline harness: WAV in → events out (runs on host, CI)
 ```
+
+`tools/yin_cli.cpp` builds as a host-only executable (`cmake --build
+engine/build --target yin_cli`), reads a mono WAV via `engine::wav::readWav`,
+and emits note events (`onset_sec\t offset_sec\t midi_pitch\t confidence`
+TSV, or JSON with `--json`). It is the "engine YIN as the floor" candidate
+for the pipeline bake-off; see `pipeline/README.md`.
 
 Current state: scaffold with a stub `engine_core` static library (`engine::version()`)
 and a plain-assert host test. Catch2 and the Oboe/DSP pieces arrive in the P0.2 spike.

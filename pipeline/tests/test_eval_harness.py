@@ -177,3 +177,50 @@ def test_note_array_validation_fails_fast() -> None:
     with pytest.raises(ValueError, match="offset"):
         invalid = np.array([[0.1, 0.05, 60.0]])
         evaluate_pair_raw(ref, invalid, CONFIG)
+
+
+# ---------------------------------------------------------------------------
+# Engine C++ YIN baseline (P0.3.3 bake-off)
+# ---------------------------------------------------------------------------
+
+
+def _yin_cli_available() -> bool:
+    """True when the engine's yin_cli binary has been built (engine/build/)."""
+    from pipeline.eval.model_wrappers import default_yin_cli_path
+
+    return default_yin_cli_path().is_file()
+
+
+@pytest.mark.skipif(
+    not _yin_cli_available(),
+    reason=(
+        "engine yin_cli binary not built; run "
+        "`cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release && "
+        "cmake --build engine/build --target yin_cli` first"
+    ),
+)
+def test_engine_yin_wrapper_on_synthetic_melody(synthetic_pair: tuple[str, str]) -> None:
+    """The engine YIN floor must find notes on the clean synthetic melody."""
+    from pipeline.eval.model_wrappers import EngineYinWrapper
+
+    wav, midi = synthetic_pair
+    wrapper = EngineYinWrapper()
+    notes, metadata = wrapper.predict_notes(wav, 22050, CONFIG)
+    assert metadata["n_notes"] == len(notes)
+    assert len(notes) > 0, "engine-yin found no notes on the clean synthetic melody"
+    result = evaluate_pair(wav, midi, wrapper, CONFIG)
+    assert result["est_note_count"] > 0
+    assert np.isfinite(result["note_f1"])
+    assert 0.0 < result["note_f1"] <= 1.0, (
+        f"engine-yin scored F1={result['note_f1']:.3f} on the clean synthetic "
+        f"melody (expected in (0, 1]); inspect the detector or thresholds"
+    )
+
+
+def test_engine_yin_wrapper_fails_loud_when_binary_missing(monkeypatch) -> None:
+    """A missing yin_cli binary must raise, never return a silent empty result."""
+    from pipeline.eval.model_wrappers import EngineYinWrapper
+
+    monkeypatch.setenv("KEYQUEST_YIN_CLI", "/nonexistent/yin_cli")
+    with pytest.raises(RuntimeError, match="yin_cli binary not found"):
+        EngineYinWrapper()

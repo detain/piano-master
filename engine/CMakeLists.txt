@@ -21,6 +21,7 @@ add_library(engine_core STATIC
     src/stub.cpp
     src/dsp/RingBuffer.cpp
     src/dsp/YinDetector.cpp
+    src/wav/WavReader.cpp
 )
 
 target_include_directories(engine_core PUBLIC
@@ -91,3 +92,25 @@ target_compile_definitions(engine_host_tests PRIVATE
 add_dependencies(engine_host_tests engine_pitch_fixtures)
 
 add_test(NAME engine_host_tests COMMAND engine_host_tests)
+
+# --- yin_cli: engine YIN baseline for the pipeline bake-off (P0.3.3) --------
+# A small host executable that reads a mono WAV and emits note events via the
+# engine's streaming YIN detector. The pipeline harness shells out to it
+# (pipeline/eval/model_wrappers.py::EngineYinWrapper); it is deliberately NOT
+# installed -- it exists only for host evaluation.
+add_executable(yin_cli tools/yin_cli.cpp)
+target_link_libraries(yin_cli PRIVATE engine_core)
+
+# The smoke test needs the generated pitch fixtures even when building only
+# the yin_cli target.
+add_dependencies(yin_cli engine_pitch_fixtures)
+
+# Regression: the A4 fixture (midi_069.wav) must emit at least one note with
+# MIDI pitch 69. Run with --json and match the plain-text key so the regex
+# needs no tab/whitespace classes (CTest's regex engine is ECMAScript).
+add_test(NAME yin_cli_midi_069
+    COMMAND yin_cli ${PITCH_FIXTURES_DIR}/midi_069.wav --json
+)
+set_tests_properties(yin_cli_midi_069 PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"midi_pitch\": 69"
+)

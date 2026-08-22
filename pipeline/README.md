@@ -53,7 +53,64 @@ Python API: `evaluate_pair(audio, midi, wrapper, MetricConfig())` and
 `evaluate_corpus(pairs, wrapper, config)` (micro-averaged notes, pooled onset
 errors, pooled chord recall, pooled octave-error rate). Wrappers live in
 `pipeline/eval/model_wrappers.py`: `GroundTruthWrapper`, `PyinBaselineWrapper`
-(librosa.pyin, numpy-YIN fallback), `BasicPitchWrapper` (optional).
+(librosa.pyin, numpy-YIN fallback), `EngineYinWrapper` (shells out to the
+engine's `yin_cli` host tool, P0.3.3), `BasicPitchWrapper` (optional). The
+`pipeline eval` CLI accepts `--wrapper ground-truth|pyin|engine-yin`.
+
+## Model bake-off status (P0.3.3, partial)
+
+Three candidate models are scored by this harness: (a) Magenta Onsets-and-
+Frames TFLite, (b) Spotify Basic Pitch, (c) the engine's C++ YIN as the floor.
+This is **partial progress only** — the real-scoring bake-off (MAESTRO, DGX
+captures, device phones) awaits P0.3.2 test-set assembly and data
+availability. The numbers below are on the synthetic clean melody
+(`make_clean_melody` in `pipeline/eval/synth.py`, 10 notes at 22050 Hz).
+
+| wrapper | engine | synthetic F1 | onset med (s) | notes est/ref |
+|---------|--------|-------------:|--------------:|--------------:|
+| `engine-yin` | engine C++ YIN (yin_cli, default cfg) | 1.0000 | 0.0107 | 10/10 |
+| `pyin` | librosa.pyin (threshold 0.7) | 1.0000 | 0.0067 | 10/10 |
+
+Both floors are perfect on the clean synthetic; the engine YIN floor needed
+two segmentation choices to get there, both documented in
+`engine/tools/yin_cli.cpp`: (1) the offset extends by one *hop* (frame bin),
+not the full analysis window, matching the pyin convention; (2) an onset
+debounce of one hop — a note starts at the *confirming* frame, rejecting
+single-frame transition flips (the engine's argmin-YIN confidently reports a
+pitch in mixed transition windows where librosa's voiced-probability gate
+stays silent). Without the debounce the engine floor scores F1 ≈ 0.5 on the
+same melody, entirely from ~50 ms-early onsets, not from wrong pitches.
+
+Attempt outcomes:
+
+- **Engine YIN floor: RUNNING.** `engine/tools/yin_cli.cpp` (window
+  2048/4096, hop, sr, confidence, min-ms, TSV or JSON), promoted a read-only
+  WAV decoder into `engine/src/wav/WavReader.{h,cpp}` (built into
+  `engine_core`; the test-only `test/wav_util` keeps its writer). `yin_cli`
+  is a host-only executable (not installed, not in the Android build);
+  `EngineYinWrapper` resolves it via `KEYQUEST_YIN_CLI` or
+  `engine/build/yin_cli` relative to the repo root and fails loudly when it
+  is missing.
+- **Magenta Onsets-and-Frames TFLite: BLOCKED — no published TFLite artifact
+  exists.** Magenta GitHub releases ship no binary assets (verified across
+  all releases via the GitHub API); the magentadata GCS bucket 404s every
+  plausible `onsets_frames_big_tflite` URL; Kaggle hosts no OAF model. The
+  only published artifacts are a TF checkpoint (`maestro_checkpoint.zip`) and
+  a TF Hub SavedModel — exporting either to TFLite requires the training
+  graph and a TensorFlow install. Separately, `tflite-runtime` ships **no
+  Python 3.12 wheels** (PyPI has zero cp312 builds; latest 2.14.0), so the
+  interpreter cannot be installed in this venv even if a model were found.
+  `OafTfliteWrapper` stays a documented skeleton until both lift.
+- **Spotify Basic Pitch: BLOCKED — dependency pin.** basic-pitch 0.4.0 pins
+  `tensorflow>=2.4.1,<2.15.1`; tensorflow 2.15 ships no cp312 wheels (the
+  earliest Python 3.12 build is 2.16), so pip has no satisfiable resolution
+  in this Python 3.12 venv. `BasicPitchWrapper` raises a descriptive
+  `RuntimeError`; run it in a Python < 3.12 environment.
+
+Real-scoring against MAESTRO is additionally blocked on data: the magentadata
+GCS bucket stores no individually downloadable wavs for v3.0.0/v2.0.0 (only
+65–96 GB zips/tfrecords), so `validate_maestro.py` re-runs the moment the
+data is obtainable.
 
 ### Validation result (the P0.3.1 acceptance step)
 

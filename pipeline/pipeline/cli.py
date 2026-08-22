@@ -33,9 +33,12 @@ def _add_eval_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("midi", help="path to the aligned ground-truth MIDI")
     parser.add_argument(
         "--wrapper",
-        choices=["ground-truth", "pyin"],
+        choices=["ground-truth", "pyin", "engine-yin"],
         default="pyin",
-        help="model wrapper to score (default: pyin)",
+        help=(
+            "model wrapper to score (default: pyin). engine-yin shells out "
+            "to the engine's yin_cli binary (P0.3.3 bake-off)"
+        ),
     )
     parser.add_argument(
         "--json",
@@ -102,7 +105,11 @@ def main(argv: list[str] | None = None) -> NoReturn:
 def _run_eval(args: argparse.Namespace) -> NoReturn:
     """Score one (audio, aligned MIDI) pair and print/emit the metrics."""
     from pipeline.eval.metrics import MetricConfig
-    from pipeline.eval.model_wrappers import GroundTruthWrapper, PyinBaselineWrapper
+    from pipeline.eval.model_wrappers import (
+        EngineYinWrapper,
+        GroundTruthWrapper,
+        PyinBaselineWrapper,
+    )
     from pipeline.eval.run import evaluate_pair
 
     config = MetricConfig(
@@ -112,6 +119,8 @@ def _run_eval(args: argparse.Namespace) -> NoReturn:
     )
     if args.wrapper == "ground-truth":
         wrapper = GroundTruthWrapper(args.midi)
+    elif args.wrapper == "engine-yin":
+        wrapper = EngineYinWrapper()
     else:
         wrapper = PyinBaselineWrapper()
 

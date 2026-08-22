@@ -23,6 +23,7 @@ from pipeline.eval.metrics import (
 )
 from pipeline.eval.model_wrappers import (
     BasicPitchWrapper,
+    EngineYinWrapper,
     GroundTruthWrapper,
     ModelWrapper,
     PyinBaselineWrapper,
@@ -32,6 +33,7 @@ from pipeline.eval.run import DEFAULT_SR, EvalRaw, evaluate_corpus, evaluate_pai
 __all__ = [
     "DEFAULT_SR",
     "BasicPitchWrapper",
+    "EngineYinWrapper",
     "EvalRaw",
     "GroundTruthWrapper",
     "MetricConfig",
