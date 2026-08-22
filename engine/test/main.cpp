@@ -1,5 +1,6 @@
 #include "engine/dsp/YinDetector.h"
 #include "engine/engine.h"
+#include "note_queue_test.h"
 #include "pitch_test.h"
 #include "ring_test.h"
 
@@ -51,6 +52,9 @@ bool runYinSmokeCheck() {
 
 int main() {
     if (!runRingBufferTests()) {
+        return 1;
+    }
+    if (!runNoteQueueTests()) {
         return 1;
     }
     if (!runYinSmokeCheck()) {

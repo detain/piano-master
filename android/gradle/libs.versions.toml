@@ -9,6 +9,11 @@
 #                       org.jetbrains.kotlin.plugin.compose version tracks the Kotlin version.
 #   Compose BOM 2025.01.00 -- stable Jan-2025 BOM (ui 1.7.x, material3 1.3.x).
 #
+#   Oboe 1.9.3       -- latest 1.9.x on Google Maven (checked 2026-08-22).
+#                       Ships prefab CMake packages (buildFeatures.prefab) and
+#                       a c++_shared STL -- the NDK audio engine links it via
+#                       find_package(oboe REQUIRED CONFIG).
+#
 # Future workspaces (plan §3.2) will add Room, DataStore, Retrofit, Hilt,
 # Media3, Play Billing and the NDK audio engine as new entries here -- the
 # catalog keeps versions centralized so those land without touching module scripts.
@@ -23,6 +28,7 @@ composeBom = "2025.01.00"
 junit = "4.13.2"
 junitExt = "1.2.1"
 espressoCore = "3.6.1"
+oboe = "1.9.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,6 +40,7 @@ androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+oboe = { group = "com.google.oboe", name = "oboe", version.ref = "oboe" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit-ext = { group = "androidx.test.ext", name = "junit", version.ref = "junitExt" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

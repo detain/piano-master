@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- TODO(P0.2 audio spike): add RECORD_AUDIO permission (with runtime rationale)
-         when the microphone -> screen loop lands. v1 deliberately declares no permissions. -->
+    <!-- Microphone capture for the audio engine (plan §20 P0.2.1). Declared
+         now so the engine bridge can request it; the runtime permission
+         request UI lands with the first screen that starts the mic. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"

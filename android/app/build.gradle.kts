@@ -8,6 +8,10 @@ android {
     namespace = "com.keyquest.app"
     compileSdk = 36
 
+    // NDK toolchain pin (matches toolchain.md). Required once Oboe's prefab
+    // CMake packages are resolved against a concrete NDK.
+    ndkVersion = "27.3.13750724"
+
     defaultConfig {
         applicationId = "com.keyquest.app"
         minSdk = 26 // Android 8.0 -- AAudio baseline (plan §3.2)
@@ -16,6 +20,23 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Native audio engine (android/app/src/main/cpp). -Werror is
+        // mandatory: warnings in the engine land are release blockers.
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++20 -Wall -Wextra -Wpedantic -Werror"
+                // Oboe's prefab binaries link the shared libc++; matching the
+                // STL avoids symbol duplication when both sides use it.
+                arguments += "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 
     buildTypes {
@@ -37,6 +58,7 @@ android {
 
     buildFeatures {
         compose = true
+        prefab = true // Oboe ships prefab CMake packages (find_package(oboe))
     }
 }
 
@@ -50,6 +72,9 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+
+    // Oboe input stream for the native audio engine (prefab CMake package).
+    implementation(libs.oboe)
 
     // Unit tests (JVM).
     testImplementation(libs.junit)

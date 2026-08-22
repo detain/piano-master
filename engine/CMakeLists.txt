@@ -72,6 +72,7 @@ add_custom_target(engine_pitch_fixtures ALL
 add_executable(engine_host_tests
     test/main.cpp
     test/ring_test.cpp
+    test/note_queue_test.cpp
     test/wav_util.cpp
     test/pitch_test.cpp
 )
