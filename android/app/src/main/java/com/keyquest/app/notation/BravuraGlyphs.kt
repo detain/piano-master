@@ -14,7 +14,7 @@ import com.keyquest.app.R
  * Bravura for real engraving symbols").
  *
  * Codepoints are the SMuFL standard values (see Bravura.json in
- * res/raw/bravura for the authoritative metadata; font + SIL OFL 1.1 license
+ * assets/bravura for the authoritative metadata; font + SIL OFL 1.1 license
  * are committed under android/app/src/main/res/font + assets/bravura).
  *
  * PERFORMANCE NOTE (P0.5.1): glyph-on-canvas text drawing is a per-frame trap,

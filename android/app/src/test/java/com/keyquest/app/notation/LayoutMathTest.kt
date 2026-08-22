@@ -3,6 +3,7 @@ package com.keyquest.app.notation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -123,6 +124,81 @@ class LayoutMathTest {
         assertTrue(LayoutMath.visibleNotes(listOf(note(2.0)), 2.0, 10.0, 90f, 0f).isEmpty())
     }
 
+    @Test
+    fun visibleNotesCullsANoteEndingExactlyAtTheLeftWindowEdge() {
+        // The window is half-open [firstVisibleBeat, lastVisibleBeat): a note
+        // whose right edge lands exactly on firstVisibleBeat is entirely behind.
+        val width = 1_000f
+        val pxPerBeat = 90f
+        val songTime = 10.0
+        val firstVisibleBeat = songTime - (width * LayoutMath.DEFAULT_PLAYHEAD_FRACTION) / pxPerBeat
+        val endingAtEdge = note(startBeat = firstVisibleBeat - 1.0, durBeats = 1.0)
+        assertTrue(
+            LayoutMath.visibleNotes(
+                notes = listOf(endingAtEdge),
+                songTimeBeats = songTime,
+                lookaheadBeats = 10.0,
+                pxPerBeat = pxPerBeat,
+                width = width,
+            ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun visibleNotesKeepsANoteStartingExactlyAtTheRightWindowEdge() {
+        val width = 1_000f
+        val pxPerBeat = 90f
+        val songTime = 10.0
+        val lastVisibleBeat = songTime + 10.0
+        val startingAtEdge = note(startBeat = lastVisibleBeat)
+        assertEquals(
+            listOf(startingAtEdge),
+            LayoutMath.visibleNotes(
+                notes = listOf(startingAtEdge),
+                songTimeBeats = songTime,
+                lookaheadBeats = 10.0,
+                pxPerBeat = pxPerBeat,
+                width = width,
+            ),
+        )
+    }
+
+    // ------------------------------------------------------------------
+    // pre-laid-out geometry (translate + draw contract, plan §7.1)
+    // ------------------------------------------------------------------
+
+    @Test
+    fun noteLayoutScreenXTranslatesBaseXBySongTime() {
+        val layout = NoteLayout(
+            note = note(startBeat = 4.0),
+            baseX = 300f,
+            y = 0f,
+            width = 10f,
+            height = 8f,
+            glyph = NoteGlyph.QUARTER,
+            label = "C",
+        )
+        // screenX = baseX - songTime * pxPerBeat (the score scrolls left).
+        assertEquals(300f, layout.screenX(0.0, 90f), 0.001f)
+        assertEquals(300f - 180f, layout.screenX(2.0, 90f), 0.001f)
+        assertEquals(300f - 450f, layout.screenX(5.0, 90f), 0.001f)
+    }
+
+    @Test
+    fun sharpsAndFlatsShiftStaffPlacementByHalfASpace() {
+        val spacePx = 10f
+        val trebleTop = 30f
+        val c = LayoutMath.staffLineY(60, LayoutMath.StaffZone.TREBLE, spacePx, trebleTop)
+        val cSharp = LayoutMath.staffLineY(61, LayoutMath.StaffZone.TREBLE, spacePx, trebleTop)
+        val a = LayoutMath.staffLineY(69, LayoutMath.StaffZone.TREBLE, spacePx, trebleTop)
+        val bFlat = LayoutMath.staffLineY(70, LayoutMath.StaffZone.TREBLE, spacePx, trebleTop)
+        // C# is 35.5 units (half a space above C at 35); Bb is 40.5 (above A at 40).
+        assertEquals(130f, c, 0.001f)
+        assertEquals(125f, cSharp, 0.001f)
+        assertEquals(0.5f * spacePx, c - cSharp, 0.001f)
+        assertEquals(0.5f * spacePx, a - bFlat, 0.001f)
+    }
+
     // ------------------------------------------------------------------
     // note-bar lanes: 5 per hand, deterministic wrap
     // ------------------------------------------------------------------
@@ -138,12 +214,10 @@ class LayoutMathTest {
     @Test
     fun noteBarLaneAssignmentWrapsAcrossTenNotesDeterministically() {
         fun laneOf(i: Int) = LayoutMath.noteBarLaneIndex(hand = if (i % 2 == 0) 'L' else 'R', lane = i % 5)
-        val first = (0 until 10).map { laneOf(it) }
         // Even i (L): lanes 0,2,4 then wrap 1,3 -> indices 0,2,4,1,3.
         // Odd i (R): lanes 1,3,0,2,4 -> indices 6,8,5,7,9.
-        assertEquals(listOf(0, 6, 2, 8, 4, 5, 1, 7, 3, 9), first)
-        // Deterministic: recomputing gives the same assignment.
-        assertEquals(first, (0 until 10).map { laneOf(it) })
+        val expected = listOf(0, 6, 2, 8, 4, 5, 1, 7, 3, 9)
+        assertEquals(expected, (0 until 10).map { laneOf(it) })
     }
 
     @Test
@@ -151,11 +225,25 @@ class LayoutMathTest {
         val laneHeight = 20f
         val gap = 16f
         val top = 8f
-        assertEquals(8f, LayoutMath.noteBarY(0, laneHeight, gap, top), 0.001f)
-        assertEquals(8f + 4 * 20f, LayoutMath.noteBarY(4, laneHeight, gap, top), 0.001f)
+        assertEquals(8f, LayoutMath.noteBarY(0, laneHeight, gap, top, lanesPerHand = 5), 0.001f)
+        assertEquals(8f + 4 * 20f, LayoutMath.noteBarY(4, laneHeight, gap, top, lanesPerHand = 5), 0.001f)
         // Lane 5 (right hand's first) sits below lane 4 PLUS the split gap.
-        assertEquals(8f + 5 * 20f + 16f, LayoutMath.noteBarY(5, laneHeight, gap, top), 0.001f)
-        assertTrue(LayoutMath.noteBarY(5, laneHeight, gap, top) > LayoutMath.noteBarY(4, laneHeight, gap, top))
+        assertEquals(8f + 5 * 20f + 16f, LayoutMath.noteBarY(5, laneHeight, gap, top, lanesPerHand = 5), 0.001f)
+        assertTrue(LayoutMath.noteBarY(5, laneHeight, gap, top, lanesPerHand = 5) > LayoutMath.noteBarY(4, laneHeight, gap, top, lanesPerHand = 5))
+    }
+
+    @Test
+    fun noteBarYRespectsLanesPerHand() {
+        // With 3 lanes per hand the split gap starts at lane 3, not 5.
+        assertEquals(3 * 20f + 16f, LayoutMath.noteBarY(3, 20f, 16f, lanesPerHand = 3), 0.001f)
+        assertEquals(4 * 20f + 16f, LayoutMath.noteBarY(4, 20f, 16f, lanesPerHand = 3), 0.001f)
+        // Lane indices outside 0..2*lanesPerHand-1 are rejected.
+        assertThrows(IllegalArgumentException::class.java) {
+            LayoutMath.noteBarY(6, 20f, 16f, lanesPerHand = 3)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            LayoutMath.noteBarY(-1, 20f, 16f, lanesPerHand = 3)
+        }
     }
 
     // ------------------------------------------------------------------
@@ -246,6 +334,40 @@ class LayoutMathTest {
     @Test
     fun stressScoreDiffersForDifferentSeeds() {
         assertNotEquals(ProtoScoreFactory.stressScore(seed = 1L), ProtoScoreFactory.stressScore(seed = 2L))
+    }
+
+    @Test
+    fun stressScoreContainsTiesWithValidTargets() {
+        val score = ProtoScoreFactory.stressScore()
+        val tied = score.notes.filter { it.tieToIndex != null }
+        assertTrue("stress score must produce ties for the staff skin to draw", tied.isNotEmpty())
+        for (note in tied) {
+            val target = note.tieToIndex!!
+            assertTrue("tieToIndex $target must be a valid note index", target in score.notes.indices)
+            assertEquals("tied notes must share a pitch", note.pitch, score.notes[target].pitch)
+        }
+    }
+
+    @Test
+    fun stressScoreWithZeroSeedStillEmitsVariedVoices() {
+        val score = ProtoScoreFactory.stressScore(seed = 0L, noteCount = 240)
+        val chordSizes = score.notes.groupBy { it.startBeat }.values.map { it.size }
+        assertTrue("seed 0 must still produce chords", chordSizes.any { it >= 2 })
+        assertTrue("seed 0 must still produce single-voice slots", chordSizes.any { it == 1 })
+    }
+
+    @Test
+    fun staffBeamsNeverConnectSimultaneousNotes() {
+        val score = ProtoScoreFactory.stressScore()
+        val staff = NoteLayoutBuilder.build(score, NotationSkin.Staff, 90f, 1_200f, 360f).staff!!
+        for (beam in staff.beams) {
+            val a = score.notes[beam.noteAIndex]
+            val b = score.notes[beam.noteBIndex]
+            assertTrue(
+                "beam must connect successive notes, not chord voices (both at ${a.startBeat})",
+                a.startBeat != b.startBeat,
+            )
+        }
     }
 
     @Test

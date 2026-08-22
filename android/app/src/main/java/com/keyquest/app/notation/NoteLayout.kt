@@ -135,17 +135,29 @@ object NoteLayoutBuilder {
         }
         val playheadX = viewportWidth * playheadFraction
 
+        // Build-time geometry shared by every note, computed once (not per
+        // note): note-bar lane height and grand-staff top lines.
+        val laneHeight = if (skin == NotationSkin.NoteBar) laneHeightFor(score, viewportHeight) else 0f
+        val spacePx = STAFF_SPACE_PX
+        val middleCY = viewportHeight / 2f
+        val trebleTopY = if (skin == NotationSkin.Staff) {
+            LayoutMath.staffTopLineY(middleCY, LayoutMath.StaffZone.TREBLE, spacePx)
+        } else 0f
+        val bassTopY = if (skin == NotationSkin.Staff) {
+            LayoutMath.staffTopLineY(middleCY, LayoutMath.StaffZone.BASS, spacePx)
+        } else 0f
+
         val noteLayouts = ArrayList<NoteLayout>(score.notes.size)
         for (note in score.notes) {
             val (width, height, y) = when (skin) {
                 NotationSkin.NoteBar -> {
-                    val laneHeight = laneHeightFor(score, viewportHeight)
                     val laneIndex = LayoutMath.noteBarLaneIndex(note.hand, note.lane, score.lanesPerHand)
                     val laneTop = LayoutMath.noteBarY(
                         laneIndex = laneIndex,
                         laneHeightPx = laneHeight,
                         splitGapPx = NOTE_BAR_SPLIT_GAP_PX,
                         topPaddingPx = NOTE_BAR_TOP_PADDING_PX,
+                        lanesPerHand = score.lanesPerHand,
                     )
                     Triple(
                         first = kotlin.math.max(note.durBeats * pxPerBeat.toDouble(), MIN_BAR_WIDTH_PX.toDouble()).toFloat(),
@@ -154,13 +166,8 @@ object NoteLayoutBuilder {
                     )
                 }
                 NotationSkin.Staff -> {
-                    val spacePx = STAFF_SPACE_PX
                     val staff = if (note.staff == 1) LayoutMath.StaffZone.TREBLE else LayoutMath.StaffZone.BASS
-                    val topLineY = LayoutMath.staffTopLineY(
-                        middleCY = viewportHeight / 2f,
-                        staff = staff,
-                        spacePx = spacePx,
-                    )
+                    val topLineY = if (note.staff == 1) trebleTopY else bassTopY
                     Triple(
                         first = NOTEHEAD_WIDTH_PX,
                         second = NOTEHEAD_HEIGHT_PX,
@@ -190,7 +197,7 @@ object NoteLayoutBuilder {
             noteBar = if (skin == NotationSkin.NoteBar) {
                 NoteBarLayout(
                     lanesPerHand = score.lanesPerHand,
-                    laneHeightPx = laneHeightFor(score, viewportHeight),
+                    laneHeightPx = laneHeight,
                     splitGapPx = NOTE_BAR_SPLIT_GAP_PX,
                     topPaddingPx = NOTE_BAR_TOP_PADDING_PX,
                 )
@@ -214,7 +221,10 @@ object NoteLayoutBuilder {
             val a = noteLayouts[i].note
             val b = noteLayouts[i + 1].note
             val sameBeamGroup = a.beamGroup != null && a.beamGroup == b.beamGroup
-            if (sameBeamGroup && a.staff == b.staff) {
+            // Beams connect successive notes in time — never the voices of one
+            // chord (same startBeat), which would draw vertical/slanted lines
+            // between simultaneous noteheads.
+            if (sameBeamGroup && a.staff == b.staff && a.startBeat < b.startBeat) {
                 beams.add(
                     BeamLayout(
                         noteAIndex = i,
@@ -257,11 +267,10 @@ object NoteLayoutBuilder {
         bassTopY: Float,
     ): List<KeySigMarker> {
         if (key.fifths == 0) return emptyList()
-        val glyph = if (key.fifths > 0) "\uE262" else "\uE260" // sharp / flat
-        val pitch = if (key.fifths > 0) 66 else 61 // F#5 line / Bb3 line stand-ins
-        val trebleY = LayoutMath.staffLineY(pitch, LayoutMath.StaffZone.TREBLE, spacePx, trebleTopY)
-        val bassY = LayoutMath.staffLineY(pitch, LayoutMath.StaffZone.BASS, spacePx, bassTopY)
-        return listOf(KeySigMarker(glyph, trebleY), KeySigMarker(glyph, bassY))
+        // The prototype's marker placement was a hardcoded stand-in; a real
+        // pack with fifths != 0 must never silently render the wrong key, so
+        // fail fast until Phase 1 implements proper circle-of-fifths engraving.
+        error("key-signature marker placement not implemented for fifths=${key.fifths}")
     }
 
     private fun laneHeightFor(score: ProtoScore, viewportHeight: Float): Float {

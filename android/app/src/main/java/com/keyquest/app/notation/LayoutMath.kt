@@ -97,13 +97,17 @@ object LayoutMath {
         if (width <= 0f) return emptyList()
         require(pxPerBeat > 0f) { "pxPerBeat must be > 0, was $pxPerBeat" }
         require(lookaheadBeats >= 0.0) { "lookaheadBeats must be >= 0, was $lookaheadBeats" }
+        require(playheadFraction in 0f..1f) { "playheadFraction must be in 0..1, was $playheadFraction" }
         val playheadX = width * playheadFraction
         // Window edges in beats: everything behind the playhead that still fits
-        // in the width, and everything up to the lookahead in front of it.
+        // in the width, and everything up to the lookahead in front of it. The
+        // window is half-open [firstVisibleBeat, lastVisibleBeat]: a note that
+        // ends exactly at the left edge is culled, one starting exactly at the
+        // right edge is kept.
         val firstVisibleBeat = songTimeBeats - playheadX / pxPerBeat
         val lastVisibleBeat = songTimeBeats + lookaheadBeats
         return notes.filter { note ->
-            note.startBeat + note.durBeats >= firstVisibleBeat && note.startBeat <= lastVisibleBeat
+            note.startBeat + note.durBeats > firstVisibleBeat && note.startBeat <= lastVisibleBeat
         }
     }
 
@@ -126,11 +130,14 @@ object LayoutMath {
         laneHeightPx: Float,
         splitGapPx: Float,
         topPaddingPx: Float = 0f,
+        lanesPerHand: Int = 5,
     ): Float {
         require(laneHeightPx > 0f) { "laneHeightPx must be > 0, was $laneHeightPx" }
         require(splitGapPx >= 0f) { "splitGapPx must be >= 0, was $splitGapPx" }
-        require(laneIndex >= 0) { "laneIndex must be >= 0, was $laneIndex" }
-        val gap = if (laneIndex >= 5) splitGapPx else 0f
+        require(laneIndex in 0 until lanesPerHand * 2) {
+            "laneIndex $laneIndex outside 0..${lanesPerHand * 2 - 1} (lanesPerHand=$lanesPerHand)"
+        }
+        val gap = if (laneIndex >= lanesPerHand) splitGapPx else 0f
         return topPaddingPx + laneIndex * laneHeightPx + gap
     }
 

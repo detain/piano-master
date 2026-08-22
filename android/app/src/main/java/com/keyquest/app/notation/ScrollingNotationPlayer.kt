@@ -3,6 +3,7 @@ package com.keyquest.app.notation
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MonotonicFrameClock
 import androidx.compose.runtime.getValue
@@ -31,6 +32,10 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,20 +73,39 @@ fun ScrollingNotationPlayer(
 
     val currentTempo by rememberUpdatedState(tempoBpm)
 
+    // Frame-timestamp store shared by the clock coroutine and the lifecycle
+    // observer below. ON_RESUME drops the stale timestamp so a background gap
+    // can never fast-forward the score.
+    val lastFrameNanos = remember { AtomicLong(-1L) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                lastFrameNanos.set(-1L)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Playhead clock: accumulate songTime only while playing.
     LaunchedEffect(playing, frameClock) {
-        var lastFrameNanos = -1L
+        // Fresh start whenever playback toggles or the frame clock changes.
+        lastFrameNanos.set(-1L)
         while (true) {
             val now = if (frameClock != null) {
                 frameClock.withFrameNanos { it }
             } else {
                 withFrameNanos { it }
             }
-            if (playing && lastFrameNanos >= 0L) {
-                val deltaSeconds = (now - lastFrameNanos) / 1_000_000_000.0
+            val previous = lastFrameNanos.getAndSet(now)
+            if (playing && previous >= 0L) {
+                // Clamp the delta: a hiccup or stale timestamp must not jump
+                // the playhead (a background gap is handled by ON_RESUME above).
+                val deltaNanos = (now - previous).coerceIn(0L, MAX_FRAME_DELTA_NANOS)
+                val deltaSeconds = deltaNanos / 1_000_000_000.0
                 songTimeBeats += deltaSeconds * LayoutMath.beatsPerSecond(currentTempo)
             }
-            lastFrameNanos = now
         }
     }
 
@@ -106,6 +130,11 @@ fun ScrollingNotationPlayer(
     val textMeasurer = rememberTextMeasurer()
     val glyphs = remember(layoutSet, textMeasurer) { PreMeasuredGlyphs.build(textMeasurer, layoutSet) }
 
+    // Mutable path pool, created ONCE per layout set on the UI thread (never
+    // per frame): the staff brace is traced once (static geometry) and each tie
+    // path is re-traced via reset() when its x moves with the scrolling score.
+    val staffPathPool = remember(layoutSet) { StaffPathPool.build(layoutSet?.staff) }
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -118,11 +147,12 @@ fun ScrollingNotationPlayer(
 
         when (skin) {
             NotationSkin.NoteBar -> drawNoteBarBackground(set.noteBar)
-            NotationSkin.Staff -> drawStaffBackground(set.staff, glyphs)
+            NotationSkin.Staff -> drawStaffBackground(set.staff, glyphs, staffPathPool)
         }
 
         // Beams and ties sit under the noteheads they connect.
         set.staff?.let { staff ->
+            val pool = staffPathPool ?: return@let // staff and pool are 1:1 with layoutSet
             for (beam in staff.beams) {
                 val a = set.notes[beam.noteAIndex]
                 val b = set.notes[beam.noteBIndex]
@@ -131,13 +161,14 @@ fun ScrollingNotationPlayer(
                 if ((ax < 0f && bx < 0f) || (ax > viewportW && bx > viewportW)) continue
                 drawBeam(ax, bx, beam.yA, beam.yB, staff.spacePx)
             }
-            for (tie in staff.ties) {
+            for (tieIndex in staff.ties.indices) {
+                val tie = staff.ties[tieIndex]
                 val a = set.notes[tie.noteAIndex]
                 val b = set.notes[tie.noteBIndex]
                 val ax = a.screenX(songTime, pxPerBeat) + a.width / 2f
                 val bx = b.screenX(songTime, pxPerBeat) + b.width / 2f
                 if ((ax < 0f && bx < 0f) || (ax > viewportW && bx > viewportW)) continue
-                drawTie(ax, bx, tie.y, staff.spacePx)
+                drawTie(pool.ties[tieIndex], ax, bx, tie.y, staff.spacePx)
             }
         }
 
@@ -174,6 +205,7 @@ private fun DrawScope.drawNoteBarBackground(bar: NoteBarLayout?) {
             laneHeightPx = bar.laneHeightPx,
             splitGapPx = bar.splitGapPx,
             topPaddingPx = bar.topPaddingPx,
+            lanesPerHand = bar.lanesPerHand,
         )
         val hand = if (laneIndex < bar.lanesPerHand) NotationSkin.NoteBar.neutralLeft
         else NotationSkin.NoteBar.neutralRight
@@ -222,7 +254,7 @@ private fun DrawScope.drawNoteBarNote(
 // Staff skin drawing
 // ---------------------------------------------------------------------------
 
-private fun DrawScope.drawStaffBackground(staff: StaffLayout?, glyphs: PreMeasuredGlyphs) {
+private fun DrawScope.drawStaffBackground(staff: StaffLayout?, glyphs: PreMeasuredGlyphs, pathPool: StaffPathPool?) {
     if (staff == null) return
     val space = staff.spacePx
     // Five lines per staff, pinned (the notation scrolls horizontally only).
@@ -242,12 +274,8 @@ private fun DrawScope.drawStaffBackground(staff: StaffLayout?, glyphs: PreMeasur
             strokeWidth = STAFF_LINE_STROKE_PX,
         )
     }
-    // Grand-staff brace on the left.
-    drawBrace(
-        x = 3f,
-        topY = staff.trebleTopY + 4 * space,
-        bottomY = staff.bassTopY,
-    )
+    // Grand-staff brace on the left: pre-traced path, per-frame draw only.
+    pathPool?.let { drawBrace(it.brace) }
     // Clefs (Bravura), centered on each staff.
     drawText(
         textLayoutResult = glyphs.trebleClef,
@@ -342,7 +370,7 @@ private fun DrawScope.drawStaffNote(
         bottom = centerY + layout.height / 2f,
     )
     if (isWhole || isHalf) {
-        drawOval(color = noteColor, topLeft = rect.topLeft, size = rect.size, style = Stroke(width = 1.8f))
+        drawOval(color = noteColor, topLeft = rect.topLeft, size = rect.size, style = HOLLOW_NOTE_STROKE)
     } else {
         drawOval(color = noteColor, topLeft = rect.topLeft, size = rect.size)
     }
@@ -372,33 +400,57 @@ private fun DrawScope.drawBeam(ax: Float, bx: Float, yA: Float, yB: Float, space
     )
 }
 
-private fun DrawScope.drawTie(ax: Float, bx: Float, noteY: Float, spacePx: Float) {
+private fun DrawScope.drawTie(path: Path, ax: Float, bx: Float, noteY: Float, spacePx: Float) {
     val y = noteY - TIE_OFFSET_SPACES * spacePx
     val rise = TIE_RISE_SPACES * spacePx
     val span = bx - ax
-    val path = Path().apply {
-        moveTo(ax, y)
-        cubicTo(
-            ax + span * 0.3f, y - rise,
-            ax + span * 0.7f, y - rise,
-            bx, y,
-        )
-    }
-    drawPath(path = path, color = NotationSkin.Staff.noteColor, style = Stroke(width = TIE_STROKE_PX))
+    // Re-trace the pre-allocated path from [StaffPathPool]: zero per-frame
+    // allocation (plan §7.1 "translate + draw only").
+    path.reset()
+    path.moveTo(ax, y)
+    path.cubicTo(
+        ax + span * 0.3f, y - rise,
+        ax + span * 0.7f, y - rise,
+        bx, y,
+    )
+    drawPath(path = path, color = NotationSkin.Staff.noteColor, style = TIE_STROKE)
 }
 
-/** Grand-staff brace: a light curly connector from treble bottom to bass top. */
-private fun DrawScope.drawBrace(x: Float, topY: Float, bottomY: Float) {
-    val color = NotationSkin.Staff.lineColor
-    val midY = (topY + bottomY) / 2f
-    val half = (bottomY - topY) / 2f
-    val path = Path().apply {
-        moveTo(x, topY)
-        cubicTo(x - 4f, topY + half * 0.25f, x + 4f, topY + half * 0.4f, x, midY)
-        cubicTo(x - 4f, midY + half * 0.1f, x - 4f, midY - half * 0.1f, x, midY)
-        cubicTo(x + 4f, midY - half * 0.4f, x - 4f, bottomY - half * 0.25f, x, bottomY)
+/** Grand-staff brace: pre-traced once in [StaffPathPool]; per-frame draw only. */
+private fun DrawScope.drawBrace(path: Path) {
+    drawPath(path = path, color = NotationSkin.Staff.lineColor, style = BRACE_STROKE)
+}
+
+/**
+ * Mutable path pool for the staff skin, created ONCE per layout set on the UI
+ * thread (never per frame). The brace is traced once because its geometry is
+ * static; each tie path is re-traced per frame via [Path.reset] because its x
+ * moves with the scrolling song time. Per-frame work stays allocation-free.
+ *
+ * [ties] is index-parallel to [StaffLayout.ties].
+ */
+private class StaffPathPool(
+    val brace: Path,
+    val ties: List<Path>,
+) {
+    companion object {
+        fun build(staff: StaffLayout?): StaffPathPool? = staff?.let { s ->
+            val topY = s.trebleTopY + 4 * s.spacePx
+            val bottomY = s.bassTopY
+            val midY = (topY + bottomY) / 2f
+            val half = (bottomY - topY) / 2f
+            val dx = BRACE_CONTROL_DX
+            StaffPathPool(
+                brace = Path().apply {
+                    moveTo(BRACE_X, topY)
+                    cubicTo(BRACE_X - dx, topY + half * 0.25f, BRACE_X + dx, topY + half * 0.4f, BRACE_X, midY)
+                    cubicTo(BRACE_X - dx, midY + half * 0.1f, BRACE_X - dx, midY - half * 0.1f, BRACE_X, midY)
+                    cubicTo(BRACE_X + dx, midY - half * 0.4f, BRACE_X - dx, bottomY - half * 0.25f, BRACE_X, bottomY)
+                },
+                ties = s.ties.map { Path() },
+            )
+        }
     }
-    drawPath(path = path, color = color, style = Stroke(width = 2f))
 }
 
 /** Stem direction: up for notes on/below the staff's middle line. */
@@ -463,6 +515,15 @@ private const val TIE_RISE_SPACES = 1.0f
 private const val TIE_STROKE_PX = 1.8f
 private const val ACCIDENTAL_GAP_PX = 6f
 private const val ACCIDENTAL_GLYPH_PX = 16f
+private const val BRACE_X = 3f
+private const val BRACE_CONTROL_DX = 4f
+private const val MAX_FRAME_DELTA_NANOS = 100_000_000L // 100ms defense clamp
+
+// Pre-built Stroke objects so the per-frame draw path never allocates a style.
+private val TIE_STROKE = Stroke(width = TIE_STROKE_PX)
+private val BRACE_STROKE = Stroke(width = 2f)
+private val HOLLOW_NOTE_STROKE = Stroke(width = 1.8f)
+
 private val CLEF_SP = 56.sp
 private val ACCIDENTAL_SP = 18.sp
 private val TIME_SIG_SP = 14.sp
