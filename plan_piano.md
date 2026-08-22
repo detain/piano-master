@@ -972,7 +972,8 @@ death year + first-publication year per song and flags anything not globally cle
    publication year.
 2. **Composer death year** → PD in life+70 territories if death year + 70 < current year.
    Record the source of the death year, not just the number.
-3. **First publication year** → covers the US pre-1929-style rules and posthumous
+3. **First publication year** → covers the US publication-year rule (works first
+   published in 1930 or earlier are in the public domain as of 2026) and posthumous
    publication edge cases, which are exactly where PD assumptions go wrong.
 4. **Territory matrix**: evaluate against our launch markets plus the obvious next ones.
    Anything not clear in *all* of them is flagged and either excluded or geo-gated.
@@ -2666,7 +2667,7 @@ real reason the educator is the first hire, not the last.
 - P0.3.3-partial: engine YIN baseline CLI (yin_cli, WavReader promoted to engine_core) + EngineYinWrapper (F1=1.0 synthetic); OAF TFLite BLOCKED (no published artifact; tflite-runtime no cp312 wheels); Basic Pitch BLOCKED (TF pin). Review-fixed: SIGFPE guard, merge threshold, subprocess timeout, CI wrapper test.
 - P0.6.3 soak + P0.6.4 drill COMPLETE: 23.4M req/1h @6510 rps, 0 errors/0 bleed/0 kB RSS growth/p99 stable; Dragonfly restart mid-consume no job loss. GATE DEFECT found: MySQL connection drop → 500 until ~50s heartbeat (§13.4.2 expectation NOT MET).
 - MySQL reconnect FIXED (43ee9a1): ReconnectingDatabaseManager subclass + app support\Db shadow (PSR-4), DbReconnectTest regression, soak-driver pacing/RSS fixes. phpunit 23/113.
-- P0.9 gate review DRAFT (docs/phase-gates/): GO-WITH-CUTS recommendation; 1 MET / 3 PARTIAL / 1 PENDING / 4 BLOCKED / 2 NOT STARTED; hardware-free Phase-1 tracks identified (SongPack v1, pipeline CLI v0, scoring engine).
+- P0.9 gate review DRAFT (docs/phase-gates/): GO-WITH-CUTS recommendation; 1 MET / 3 PARTIAL at draft; revised to 2 MET / 2 PARTIAL once the reconnect fix landed (43ee9a1); hardware-free Phase-1 tracks identified (SongPack v1, pipeline CLI v0, scoring engine).
 **Environment:** unchanged (new server; host-network DB containers; docker compose still broken at daemon level).
 **CI:** green on all pushed commits (remote runs verified via gh).
 **Next:** device hardware (5 phones, DGX-520, MIDI keyboards) for P0.2.4/P0.3.4/P0.4/P0.7 + P0.5.3; rights vetting (P0.8); then Phase-1 hardware-free tracks (P1.1 SongPack spec, P1.2 pipeline CLI, P1.5 scoring engine) and FINAL P0.9 re-issue once hardware + rights land.
