@@ -3,6 +3,7 @@
 #include "note_queue_test.h"
 #include "pitch_test.h"
 #include "ring_test.h"
+#include "wav_reader_test.h"
 
 #include <cassert>
 #include <cmath>
@@ -55,6 +56,9 @@ int main() {
         return 1;
     }
     if (!runNoteQueueTests()) {
+        return 1;
+    }
+    if (!runWavReaderTests()) {
         return 1;
     }
     if (!runYinSmokeCheck()) {

@@ -75,6 +75,7 @@ add_executable(engine_host_tests
     test/ring_test.cpp
     test/note_queue_test.cpp
     test/wav_util.cpp
+    test/wav_reader_test.cpp
     test/pitch_test.cpp
 )
 

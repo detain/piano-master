@@ -43,6 +43,26 @@ jobs:
           cmake --build build -j
           ctest --test-dir build --output-on-failure
 
+      # The wrapper->CLI integration (pipeline EngineYinWrapper shelling out
+      # to engine/build/yin_cli) otherwise only ever runs locally. yin_cli is
+      # already built by the host-test step above (it is an ALL target); this
+      # installs the handful of runtime deps the engine_yin test imports and
+      # runs just that test. Keep it cheap: no editable install, no librosa.
+      - name: Install pipeline eval deps
+        run: |
+          set -euxo pipefail
+          python3 -m venv /tmp/keyquest-eval-venv
+          /tmp/keyquest-eval-venv/bin/pip install --quiet \
+            numpy soundfile mir_eval pretty_midi pytest
+
+      - name: Run EngineYinWrapper integration test
+        env:
+          PYTHONPATH: pipeline
+        run: |
+          set -euxo pipefail
+          /tmp/keyquest-eval-venv/bin/pytest \
+            pipeline/tests/test_eval_harness.py -k engine_yin -q
+
   # ---------------------------------------------------------------------------
   # 2. Android unit tests — JVM tests only, no emulator.
   #    The Gradle wrapper IS committed and pins Gradle 8.11.1; the job runs it

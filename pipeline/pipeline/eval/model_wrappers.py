@@ -298,9 +298,25 @@ class EngineYinWrapper:
         with tempfile.TemporaryDirectory() as tmp_dir:
             wav_path = os.path.join(tmp_dir, "input.wav")
             sf.write(wav_path, y, sr)
-            result = subprocess.run(
-                cmd + [wav_path], capture_output=True, text=True, check=False
-            )
+            try:
+                result = subprocess.run(
+                    cmd + [wav_path],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=60,
+                )
+            except subprocess.TimeoutExpired as exc:
+                # Fail loud: a hung yin_cli must not block the harness forever.
+                detail = ""
+                if exc.stderr:
+                    detail = exc.stderr.decode(errors="replace") if isinstance(
+                        exc.stderr, bytes
+                    ) else exc.stderr
+                suffix = f": {detail.strip()}" if detail.strip() else ""
+                raise RuntimeError(
+                    f"yin_cli timed out after 60s on {wav_path}{suffix}"
+                ) from exc
             if result.returncode != 0:
                 raise RuntimeError(
                     f"yin_cli failed (exit {result.returncode}) on {wav_path}: "

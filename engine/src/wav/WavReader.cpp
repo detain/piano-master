@@ -91,6 +91,16 @@ WavData readWav(const std::string& path) {
             }
             const uint32_t bytesPerSample =
                 static_cast<uint32_t>(numChannels) * (bitsPerSample / 8u);
+            if (bytesPerSample == 0) {
+                // bitsPerSample in [1, 7] truncates to zero bytes per frame;
+                // dividing by it would SIGFPE. Reject the layout before the
+                // frame-count division -- the supported encodings below are
+                // 16-bit PCM and 32-bit float, so this is always malformed.
+                throw std::runtime_error(
+                    path + ": invalid byte layout (bitsPerSample=" +
+                    std::to_string(bitsPerSample) + ", channels=" +
+                    std::to_string(numChannels) + ")");
+            }
             const uint32_t numFrames = size / bytesPerSample;
 
             WavData wav;

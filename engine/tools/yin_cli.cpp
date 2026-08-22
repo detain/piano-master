@@ -159,7 +159,11 @@ std::vector<float> resampleLinear(const std::vector<float>& samples,
     std::vector<float> out(outLength);
     for (std::size_t i = 0; i < outLength; ++i) {
         const double position = static_cast<double>(i) * ratio;
-        const std::size_t lower = static_cast<std::size_t>(position);
+        // Clamp to the last sample: for tiny inputs (e.g. a size-1 WAV) the
+        // floating-point position can round to exactly samples.size(), which
+        // would read past the end at samples[lower].
+        const std::size_t lower =
+            std::min(static_cast<std::size_t>(position), samples.size() - 1);
         const std::size_t upper = std::min(lower + 1, samples.size() - 1);
         const double fraction = position - static_cast<double>(lower);
         out[i] = static_cast<float>((1.0 - fraction) * samples[lower] +
@@ -231,13 +235,20 @@ std::vector<NoteEvent> runDetector(const std::vector<float>& samples,
     }
     closeNote();
 
-    // Merge adjacent same-pitch notes separated by at most one hop (a single
+    // Merge adjacent same-pitch notes separated by at most two hops (one
     // dropped or unvoiced frame), so brief confidence dips do not split one
-    // sustained note into two.
+    // sustained note into two. A single dropped frame creates a TWO-hop gap
+    // under the +1-hop offset and +1-hop onset-debounce conventions above
+    // (note A's offset and note B's onset each sit one hop past their last/
+    // first frame), so a one-hop threshold can never bridge it. Two hops
+    // bridge exactly one dropped frame. Tradeoff: two same-pitch notes with a
+    // genuine rest shorter than 2 * hopSec also merge; acceptable for the
+    // monophonic bake-off floor, where the confidence gate is the intended
+    // segmentation authority.
     std::vector<NoteEvent> merged;
     for (NoteEvent& note : notes) {
         if (!merged.empty() && note.midiPitch == merged.back().midiPitch &&
-            note.onset - merged.back().offset <= hopSec) {
+            note.onset - merged.back().offset <= 2.0 * hopSec) {
             merged.back().offset = note.offset;
             merged.back().confidence =
                 std::max(merged.back().confidence, note.confidence);

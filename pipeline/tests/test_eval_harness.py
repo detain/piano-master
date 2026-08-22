@@ -18,6 +18,7 @@ Everything runs offline and stays well under the 30-second budget.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -185,10 +186,16 @@ def test_note_array_validation_fails_fast() -> None:
 
 
 def _yin_cli_available() -> bool:
-    """True when the engine's yin_cli binary has been built (engine/build/)."""
+    """True when the engine's yin_cli binary is resolvable.
+
+    Mirrors ``EngineYinWrapper._resolve_binary``'s resolution order:
+    ``KEYQUEST_YIN_CLI`` first, then the default ``engine/build/yin_cli`` --
+    a custom binary via env must not be silently skipped.
+    """
     from pipeline.eval.model_wrappers import default_yin_cli_path
 
-    return default_yin_cli_path().is_file()
+    candidate = os.environ.get("KEYQUEST_YIN_CLI") or default_yin_cli_path()
+    return Path(candidate).is_file()
 
 
 @pytest.mark.skipif(
