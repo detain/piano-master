@@ -18,6 +18,9 @@ The wrappers here form the P0.3.x baseline zoo:
 - ``BasicPitchWrapper``   -- optional Spotify Basic Pitch, for the published
   MAESTRO calibration (F1 ~0.82). Requires ``basic-pitch`` (tensorflow); the
   import is lazy so the rest of the harness stays lightweight.
+- ``OafTfliteWrapper``    -- documented skeleton for Magenta Onsets-and-Frames
+  TFLite (P0.3.3 attempt): blocked on missing published model + no cp312
+  tflite-runtime wheels; raises at construction until unblocked.
 """
 
 from __future__ import annotations
@@ -328,6 +331,57 @@ class EngineYinWrapper:
             "n_notes": len(notes),
         }
         return notes, metadata
+
+
+# ---------------------------------------------------------------------------
+# Magenta Onsets-and-Frames TFLite (skeleton; blocked, see docstring)
+# ---------------------------------------------------------------------------
+
+
+class OafTfliteWrapper:
+    """Magenta Onsets-and-Frames TFLite wrapper -- **not runnable yet**.
+
+    This is a documented skeleton (P0.3.3 attempt outcome: BLOCKED). When
+    both blockers lift, implement it as:
+
+    - Feature pipeline (librosa, already a harness dependency): compute the
+      Magenta log-mel spectrogram frames (229 frames x 80 mel bins per
+      excerpt, STFT params from the magenta codebase: window 2048, hop 1024,
+      mel bins 80, fmin 27.5, fmax 8000, log magnitude). The published
+      TFLite build's input is ``[1, 229, 80]`` (or ``[1, 1, 229, 80]``).
+    - Inference: ``tflite_runtime.Interpreter`` over a sliding excerpt
+      window; the model emits per-frame onset + frame (pitch) probabilities.
+    - Decode (plan §5.2.5 hysteresis): a frame with onset probability > 0.5
+      starts a note at the frame's pitch; the note ends when its frame
+      probability drops below 0.3; discard notes shorter than 60 ms. Return
+      the ``(N, 3)`` ``[onset, offset, midi_pitch]`` array.
+
+    Exact blockers verified 2026-08-22 (P0.3.3 attempt):
+
+    1. **No published OAF TFLite artifact exists.** Magenta GitHub releases
+       ship no binary assets (GitHub API, all releases); the magentadata GCS
+       bucket 404s every plausible ``onsets_frames_big_tflite`` URL; Kaggle
+       hosts no OAF model. The only published artifacts are a TF checkpoint
+       (``maestro_checkpoint.zip``) and a TF Hub SavedModel -- exporting
+       either needs the training graph and a TensorFlow install.
+    2. **``tflite-runtime`` has no Python 3.12 wheels.** PyPI ships zero
+       cp312 builds (latest 2.14.0), so the interpreter cannot be installed
+       in this venv even if a model were found.
+
+    To unblock: locate/export an ``onsets_frames_big`` TFLite and add a
+    ``tflite-runtime`` build for Python 3.12 (or run the wrapper in a
+    Python < 3.12 venv with the ``tensorflow`` package's
+    ``tf.lite.Interpreter``). Record progress in ``pipeline/README.md``.
+    """
+
+    name = "oaf-tflite"
+
+    def __init__(self) -> None:
+        raise RuntimeError(
+            "OafTfliteWrapper is a documented skeleton: no published OAF "
+            "TFLite model exists and tflite-runtime has no Python 3.12 "
+            "wheels. See the class docstring for the unblock path."
+        )
 
 
 def _resample(y: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:

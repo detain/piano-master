@@ -26,6 +26,7 @@ from pipeline.eval.model_wrappers import (
     EngineYinWrapper,
     GroundTruthWrapper,
     ModelWrapper,
+    OafTfliteWrapper,
     PyinBaselineWrapper,
 )
 from pipeline.eval.run import DEFAULT_SR, EvalRaw, evaluate_corpus, evaluate_pair
@@ -38,6 +39,7 @@ __all__ = [
     "GroundTruthWrapper",
     "MetricConfig",
     "ModelWrapper",
+    "OafTfliteWrapper",
     "PyinBaselineWrapper",
     "chord_recall_by_size",
     "evaluate_corpus",
