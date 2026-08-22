@@ -54,7 +54,6 @@ $total = (int) ($args['total'] ?? 100000);
 $duration = (int) ($args['duration'] ?? 3600);
 $concurrency = (int) ($args['concurrency'] ?? 16);
 $base = $args['base'] ?? 'http://127.0.0.1:8787';
-$masterPidArg = isset($args['pid']) ? (int) $args['pid'] : 0;
 $summaryPath = $args['summary'] ?? '/tmp/kq-soak-summary-' . getmypid() . '.json';
 $runReconnectCheck = isset($args['reconnect-check']);
 $routes = ['/', '/healthz', '/readyz', '/db/version', '/cache/now'];
@@ -182,23 +181,19 @@ $record = static function (int $bucketIndex, float $latencyMs) use (&$buckets): 
 };
 
 $requests = function () use ($client, $routes, $total, $deadline, $concurrency, $ratePerSecond, &$starts, &$done, &$buckets, &$bleedMismatches, $startTime, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record): \Generator {
-    $sent = 0;
-    while ($sent < $total && microtime(true) < $deadline) {
-        $i = $sent++;
-        // Pacing: request i may not leave before its scheduled slot, so
-        // --total requests are spread across --duration (rate limiter, not
-        // deadline). Never block the loop for more than 1 s per iteration.
-        $scheduledAt = $startTime + $i / $ratePerSecond;
-        $waitUs = (int) (($scheduledAt - microtime(true)) * 1_000_000);
-        if ($waitUs > 0) {
-            usleep(min($waitUs, 1_000_000));
-            if (microtime(true) >= $deadline) {
-                break;
-            }
-        }
-        $route = $routes[$i % count($routes)];
-        $id = 'kq-soak-' . $i . '-' . bin2hex(random_bytes(3));
-        yield $id => function () use ($client, $route, $id, $startTime, &$starts, &$done, &$buckets, &$bleedMismatches, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record, $total) {
+    $chunk = 0;
+    while (microtime(true) < $deadline) {
+        // Pacing in 1s chunks: request i belongs to chunk floor(i/rate), so
+        // each 1s chunk issues `rate` requests and we sleep the remainder of
+        // the second. Any total/duration ratio is honored — the old code
+        // capped each per-slot wait at 1s, truncating long gaps (e.g.
+        // --total=10 --duration=3600 finished in ~10s instead of ~1h).
+        $chunkStartIdx = (int) floor($chunk * $ratePerSecond);
+        $chunkEndIdx = (int) min($total, floor(($chunk + 1) * $ratePerSecond));
+        for ($i = $chunkStartIdx; $i < $chunkEndIdx; $i++) {
+            $route = $routes[$i % count($routes)];
+            $id = 'kq-soak-' . $i . '-' . bin2hex(random_bytes(3));
+            yield $id => function () use ($client, $route, $id, $startTime, &$starts, &$done, &$buckets, &$bleedMismatches, &$nextProgressAt, &$nextRssSampleAt, $workerRssKb, $record, $total) {
             $starts[$id] = microtime(true);
             $promise = $client->getAsync($route, ['headers' => ['X-Request-Id' => $id]]);
 
@@ -245,6 +240,21 @@ $requests = function () use ($client, $routes, $total, $deadline, $concurrency, 
                 }
             );
         };
+        }
+        if ($chunkEndIdx >= $total) {
+            break;
+        }
+        // Sleep the remainder of the chunk (<= 1s) before the next one so
+        // --total requests fill the whole --duration window.
+        $nextChunkStart = $startTime + $chunk + 1;
+        $waitUs = (int) (($nextChunkStart - microtime(true)) * 1_000_000);
+        if ($waitUs > 0) {
+            usleep($waitUs);
+            if (microtime(true) >= $deadline) {
+                break;
+            }
+        }
+        $chunk++;
     }
 };
 

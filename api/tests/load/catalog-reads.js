@@ -37,17 +37,28 @@ export const options = {
   },
   thresholds: {
     failed_requests: ['rate<0.01'],
+    // Gate the exit code on check failures too: any failed check (including
+    // 'not degraded') must fail the run, not just the status rate above.
+    checks: ['rate>0.99'],
   },
 };
 
 export default function () {
   const res = http.get(`${BASE_URL}/cache/now`);
+  let data = null;
+  try {
+    data = res.json();
+  } catch (error) {
+    // Non-JSON body (e.g. a proxy error page): keep data null so the
+    // 'not degraded' check fails and FAILED.add still runs below.
+    data = null;
+  }
   check(res, {
     'GET /cache/now -> 200': (r) => r.status === 200,
     // Non-drill runs must fail loudly on an outage: the drill (drills.md)
     // verifies the degraded path deliberately with curl probes, so this
     // check only guards regression runs against an unintended outage.
-    'not degraded': (r) => r.json().degraded !== true,
+    'not degraded': () => data !== null && data.degraded !== true,
   });
   FAILED.add(res.status !== 200);
 }

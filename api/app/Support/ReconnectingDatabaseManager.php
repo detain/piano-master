@@ -30,6 +30,13 @@ use Webman\Database\DatabaseManager;
  *
  * No per-request overhead: this path runs only when a query already failed
  * with a lost-connection error.
+ *
+ * Coroutine-mode caveat: this fix heals only the Context-cached connection in
+ * place — in coroutine mode the pool can hold up to `max_connections` live
+ * channel members and the others are handed out dead until the ~50 s heartbeat
+ * replaces them. Deployment is coroutine-OFF per ADR-0002, so the single
+ * `nonCoroutineConnection` (always the Context connection) is healed; future
+ * coroutine enablement must revisit this.
  */
 class ReconnectingDatabaseManager extends DatabaseManager
 {

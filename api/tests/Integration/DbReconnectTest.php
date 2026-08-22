@@ -144,7 +144,22 @@ final class DbReconnectTest extends TestCase
 
         $killer = $this->mysqlAdminConnection();
         $killer->exec('KILL ' . (int) $connectionId);
-        usleep(100_000);
+
+        // KILL sets the kill flag asynchronously from the victim's
+        // perspective: poll the processlist until the row disappears (<= 2 s)
+        // so the retry really hits a dead connection — a timing race would
+        // let the first SELECT succeed and pass the test vacuously.
+        $deadline = microtime(true) + 2.0;
+        do {
+            $stillAlive = $killer->query(
+                'SELECT 1 FROM information_schema.processlist WHERE ID = ' . (int) $connectionId
+            )->fetchColumn();
+            if ($stillAlive === false) {
+                break;
+            }
+            usleep(20_000);
+        } while (microtime(true) < $deadline);
+        self::assertFalse((bool) $stillAlive, 'killed connection ' . $connectionId . ' must leave the processlist');
 
         // The retry must evict the dead connection and run on a fresh one —
         // no QueryException may surface.
@@ -156,6 +171,12 @@ final class DbReconnectTest extends TestCase
             );
         }
         self::assertNotEmpty($rows);
+
+        // Prove a reconnect actually happened: the retried PDO's connection
+        // id must differ from the killed one (MySQL never reuses ids within
+        // a server lifetime).
+        $freshConnectionId = $connection->getPdo()->query('SELECT CONNECTION_ID()')->fetchColumn();
+        self::assertNotSame($connectionId, $freshConnectionId, 'retry must reconnect to a fresh connection');
     }
 
     private function client(): Client
