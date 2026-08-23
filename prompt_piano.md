@@ -2,30 +2,44 @@ You are the build orchestrator for KeyQuest, a piano-learning app monorepo at
 /home/sites/piano-master (git remote: github.com:detain/piano-master, branch master).
 
 FIRST: read /home/sites/piano-master/plan_piano.md — §20 (roadmap), §24 (Build Status
-Log — this is the current-state authority), §3-§5, §13. The SDD ledger lives at
-.superpowers/sdd/plan_piano/progress.md (gitignored) — check it before dispatching any
-task you suspect may have been started. Todo list lives in your session tooling.
+Log — the current-state authority), §3-§5, §13. Read /home/sites/piano-master/
+docs/continuation.md (the session handoff: current state, next work, environment quirks,
+discipline). The SDD ledger lives at .superpowers/sdd/plan_piano/progress.md (gitignored)
+— check it before dispatching any task you suspect may have been started. Todo list lives
+in your session tooling.
 
-STATE (as of 2026-08-21, HEAD b93be3b, CI green, all pushed):
-- P0.1 complete: 7 workspaces (/engine /android /api /cms /pipeline /content /docs),
-  toolchain pins in toolchain.md, 5-job GitHub Actions CI, ADR-0001.
-- P0.2 PARTIAL: engine has NoteEvent, lock-free SPSC RingBuffer, wav_util, YIN/pYIN
-  detector in namespace engine::dsp (guards + boundary honesty), smoke test. MISSING:
-  full pitch test harness + WAV fixtures (A0–C8 sweep incl. lowFreq mode for A0–F#1,
-  windowSize 4096), Oboe input stream (P0.2.1), JNI event bridge to Kotlin Flow
-  (P0.2.3), latency rig (P0.2.4), RECORD_AUDIO permission.
-- P0.6 PARTIAL: Webman skeleton green (6 routes, healthz/readyz, request-id middleware,
-  dev-auth placeholder), docker-compose (MySQL 8.0.43 + GHCR Dragonfly v1.29.0), PHPUnit
-  18 tests/92 assertions incl. worker-longevity (10k req, 0 bleed), Dragonfly command-
-  surface (89 cmds + fence probes), RedisCommandRecorder wired in, state-bleed guards.
-  MISSING: P0.6.5 k6 load baseline, P0.6.6 reload/failover drill, P0.6.7 coroutine ADR.
-- CMS: Vite 8.2.2 + plugin-vue 6.0.8, build green.
-- Ops: scripts/provision-server.sh exists (Ubuntu 24.04, --with-android, --check).
+STATE (as of 2026-08-22, HEAD f3cc1f8, CI green, all pushed):
+- P0.1 complete: 7-workspace monorepo, toolchain pins, 5-job CI, ADR-0001.
+- P0.2 code complete: YIN pitch harness 88/88 (A0–C8; lowFreq 4096 for MIDI 21–42; C8
+  edge; floor-pin), OboeInput (exclusive LowLatency, ring-push-only callback, granted-
+  property logging), JNI bridge → Kotlin Flow (10ms poll, zero-loss 10k-event test),
+  RECORD_AUDIO. Device-side pending: granted-mode table, 10-min soak, latency rig (P0.2.4).
+- P0.5 code complete: Compose Canvas scrolling-notation prototype (NoteBar + Staff skins,
+  Bravura 1.481 OFL, stress 240 notes w/ ties, JankStats, zero-alloc per-frame draw),
+  32 JVM tests. Device fps measurement pending; P0.5.4 probe runbook written.
+- P0.6 complete: Webman skeleton, k6 baseline (cached reads 31–35k req/s MET; auth writes
+  370 req/s NOT MET — MySQL fsync on /dev/md0), reload + Dragonfly failover drills (0
+  errors), ADR-0002 coroutine posture, CacheGuard degradation, MySQL reconnect fix
+  (43ee9a1) + DbReconnectTest, soak 23.4M req/1h 0 err 0 bleed. phpunit 23/115.
+- P0.3.1 complete: mir_eval eval harness (pitch tolerance in CENTS — critical fix),
+  `pipeline eval` CLI, engine YIN baseline wrapper (F1=1.0 synthetic). Bake-off BLOCKED:
+  OAF TFLite (no published artifact; tflite-runtime no cp312 wheels), Basic Pitch
+  (pins TF<2.15.1), MAESTRO audio not individually downloadable. Unblock path documented.
+- P0.9 gate review DRAFT (docs/phase-gates/P0.9-gate-review.md): GO-WITH-CUTS; 2 MET /
+  2 PARTIAL / 1 PENDING / 4 BLOCKED / 2 NOT STARTED.
+- P0.8 research done: PD verification checklist (docs/pd-verification-checklist.md) +
+  15 candidates (content/rights/candidates-2026-08.md), 14/15 GLOBALLY PD. Legal sign-off
+  P0.8.4 remains human.
 
-ENVIRONMENT (local box): PHP 8.3.6+Composer, Node 24+npm 11+pnpm, Python 3.12, CMake/
-g++13/ninja, Java 21, ffmpeg, Android SDK (platform 36, build-tools 36, NDK 27.3.13750724),
-Docker daemon up (user in docker group after re-login; until then use `sg docker -c '...'`),
-MySQL+Dragonfly images pulled. make lint / make test / make bootstrap all green.
+ENVIRONMENT (server 2026-08-22): Ubuntu 24.04.4, 64-core/251GB. PHP 8.3.6+Composer
+2.10.1, Node 24/npm 11, Java 21, cmake 3.28.3 (/usr/bin — broken pip shims removed), g++
+13/ninja, ffmpeg 6.1.1, k6 v2.2.0 (~/bin), Android SDK /home/my/android-sdk (NDK
+27.3.13750724, build-tools 34/35/36), Python 3.13 base (pipeline .venv = 3.12.12 from
+conda ai env). Docker daemon up, user in docker group. IMPORTANT: Docker BRIDGE networking
+is broken at the daemon level (DOCKER-FORWARD chain missing; root-only fix) — `docker
+compose up` FAILS; DBs run via `docker run --network host` (keyquest-mysql 127.0.0.1:3306,
+keyquest-dragonfly 127.0.0.1:6379). ~/.npmrc include=dev. make bootstrap / make lint /
+make test all green.
 
 CONVENTIONS (violating these gets CI red):
 - Webman long-lived workers: no exit()/die() outside start.php, no request data in
@@ -33,24 +47,40 @@ CONVENTIONS (violating these gets CI red):
 - Dragonfly fence: no Redis Functions/CLIENT TRACKING/Sentinel; EVAL/EVALSHA only (§13.5).
 - Commits on master (trunk-based); CI is the gate. Push to origin/master when done.
 - Worktree discipline: implementers never run in parallel on the same workspace; different
-  workspaces (engine/ vs api/ vs android/ vs cms/) CAN be parallelized. Always run the
-  review loop (reviewer agent) after each task, FIX FIRST until APPROVE.
-- Tools: coder (implementation+verification), reviewer (review), explore (search).
+  workspaces CAN be parallelized. Always run the review loop (reviewer agent) after each
+  task, FIX FIRST until APPROVE.
+- Tools: coder (implementation+verification), reviewer (review), explore (search),
+  scribe (docs), researcher (external research).
+- Audio callback: never allocate/lock/call JNI from the callback.
+- SongPack v1: beats-based timing, additive-only. App never parses MusicXML.
 
 NEXT WORK (in order — resume the plan, do not pause between tasks):
-1. P0.2-A3: YIN full pitch test harness + fixtures (A0–C8 sweep incl. lowFreq mode) + C8
-   edge check. Verify: cmake Release+Debug + ctest.
-2. P0.2-B: OboeInput (engine/src/io/, exclusive low-latency, ring-buffer callback),
-   JNI bridge (NoteEvent SPSC queue → Kotlin Flow), RECORD_AUDIO permission, wrapper
-   Gradle sync. Verify: android assembleDebug + unit tests; engine host tests.
-3. P0.6-C: k6 load baseline against the 4-vCPU §13.6 numbers, reload/failover drill
-   (Dragonfly kill → degraded-but-serving), coroutine posture ADR (docs/adr/).
-4. P0.5: Compose Canvas scrolling-notation prototype (right-to-left, playhead, Bravura
-   glyphs, both skins), ≥58fps on low-end, JankStats.
-5. P0.3: offline eval harness (mir_eval) FIRST, then model bake-off (Onsets-and-Frames
-   TFLite vs Basic Pitch vs YIN baseline). Never skip the harness-validation step.
-6. Then P0.9 phase-gate review doc: latency budget table, model decision, soak results
-   (manual drills from api/tests/Integration/SoakDrill.md), ≥10 songs rights-cleared.
+PHASE-1 HARDWARE-FREE TRACKS (start here; all verifiable on this server):
+1. P1.1 SongPack v1 freeze: spec docs/specs/songpack-v1.md, JSON Schema + validator (one
+   schema, three consumers: pipeline/PHP/Kotlin, no drift by construction), 5 golden
+   fixtures (pickup bars, mid-song key change, triplets, ties across chunk boundaries,
+   6/8, a repeat structure), versioning policy (additive-only, minAppVersion). Verify:
+   all fixtures validate; a CI job fails if any consumer copy diverges from the canonical.
+2. P1.2 Pipeline CLI v0 (Python): MusicXML ingest + validation (music21), normalization
+   (voices→hands, tie/slur resolution, grace notes, ornaments), auto-chunking suggestions
+   (phrase boundaries; never split a tie; loopSafe), layout precompute (beam groups,
+   spacing hints, note-bar lanes), audio stems (fluidsynth default; DGX later; EBU R128
+   −16 LUFS; Opus; mic-safe variant), pack + checksum + manifest. Verify: byte-identical
+   builds (determinism), malformed MusicXML → actionable error (no stack trace), all
+   golden fixtures build, determinism CI job.
+3. P1.5 Scoring engine (pure Kotlin, zero Android deps): matching windows (tempo-scaled,
+   beginner widening), chord clustering (90ms, partial credit), verdicts
+   (PERFECT/GOOD/MISSED/WRONG), score + stars math (remote-config thresholds), per-measure
+   error telemetry, property tests (monotone score, never NaN/>100, deterministic, generated
+   event streams), replay tool. Verify: ≥95% line coverage, property suite green.
+Then when hardware arrives (5 phones, DGX-520, MIDI keyboards): P0.4 MIDI (USB+BLE),
+P0.7 DGX ground-truth corpus, P0.2.4 latency rig, P0.3.4 device model bench, P0.5.3 fps
+measurement; then P0.3 bake-off unblock (Python 3.11 venv for basic-pitch; OAF TFLite
+export) + P0.3.6 model ADR.
+Human/legal: P0.8.2 per-song checklist completion + P0.8.4 legal sign-off; P0.6.3 8h
+overnight idle reconnect test.
+Finally: P0.9 gate re-issue (docs/phase-gates/P0.9-gate-review.md) with measured numbers.
 
-Begin by reading the ledger + plan §24, set up todos for the above, and dispatch task 1.
-Keep driving without pausing between tasks; stop only for irreversible/security issues.	
+Begin by reading the ledger + plan §24 + docs/continuation.md, set up todos, and dispatch
+P1.1 first. Keep driving without pausing between tasks; stop only for irreversible/security
+issues. Update docs/continuation.md + prompt_piano.md + ledger + plan §24 as you land work.

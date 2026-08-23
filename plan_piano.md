@@ -2659,6 +2659,7 @@ real reason the educator is the first hire, not the last.
 ## 24. Build Status Log
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
+> **LATEST (2026-08-22):** Phase-0 complete except external blockers — see the entries below (incl. "(late)" and "(final)"), plus docs/continuation.md (session handoff) and prompt_piano.md (orchestrator prompt). Next work: Phase-1 hardware-free tracks — P1.1 SongPack v1, P1.2 pipeline CLI v0, P1.5 scoring engine.
 
 ### 2026-08-22 (late) — P0.5 renderer prototype + P0.3.3-partial + soak/drill + MySQL reconnect fix + P0.9 gate draft
 **Commits:** `15af47f` + `d23985b` (P0.5) → `b7b44c8` + `e2ad357` + `7ac461b` (P0.3.3-partial) → `49c143b` (soak/drill results) → `840d566` + `47c92a0` (P0.9 gate draft + revision) → `43ee9a1` (MySQL reconnect fix).
