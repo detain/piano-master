@@ -102,6 +102,32 @@ final class SongPackSchemaTest extends TestCase
         );
     }
 
+    public function testUnknownKeysAreAccepted(): void
+    {
+        // plan §8.1.9: additive-only evolution — a pack carrying keys this
+        // consumer does not know about must still validate, so a future format
+        // stays readable by today's API.
+        [$validator, $schema] = $this->validatorAndSchema();
+
+        $manifest = $this->loadFixtureJson('pickup_anacrusis', 'manifest.json');
+        $manifest->futureField = true;
+        $result = $validator->validate($manifest, $schema);
+        self::assertTrue(
+            $result->isValid(),
+            'a manifest carrying an unknown key must still validate (forward-compat, plan §8.1.9): '
+            . $this->formatError($result)
+        );
+
+        $notes = $this->loadFixtureJson('pickup_anacrusis', 'notes.json');
+        $notes->levels->{'1'}[0]->futureNoteField = 1;
+        $result = $validator->validate($notes, $schema);
+        self::assertTrue(
+            $result->isValid(),
+            'a note carrying an unknown key must still validate (forward-compat, plan §8.1.9): '
+            . $this->formatError($result)
+        );
+    }
+
     /**
      * @return array{Validator, Schema}
      */

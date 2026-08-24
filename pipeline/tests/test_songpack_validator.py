@@ -160,6 +160,23 @@ def test_nan_in_file_is_rejected(tmp_path: Path) -> None:
     _assert_invalid(validate_pack(pack), "not valid SongPack JSON", "NaN startBeat")
 
 
+def test_invalid_build_timestamp_is_rejected(tmp_path: Path) -> None:
+    """§8.1.10: the Python consumer must enforce `format: date-time` on
+    buildInfo.buildTimestamp, exactly like the PHP (opis) and Kotlin (networknt)
+    consumers. Non-vacuous: the failure must name the buildTimestamp path."""
+    pack = _copy_fixture(tmp_path, "pickup_anacrusis")
+
+    def _bad_timestamp(doc) -> None:
+        doc["buildInfo"]["buildTimestamp"] = "not-a-date"
+
+    _mutate(pack, "manifest.json", _bad_timestamp)
+    _assert_invalid(
+        validate_pack(pack),
+        "buildTimestamp",
+        "malformed buildInfo.buildTimestamp",
+    )
+
+
 # ---------------------------------------------------------------------------
 # (c) Forward compatibility: unknown keys are ignored
 # ---------------------------------------------------------------------------

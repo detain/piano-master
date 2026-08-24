@@ -18,10 +18,32 @@ import argparse
 import json
 import os
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import jsonschema
+
+# `format: date-time` enforcement (plan §8.1.10): jsonschema only registers a
+# date-time check when its OPTIONAL rfc3339_validator dependency is importable,
+# which it is not in this environment — so without the check below the Python
+# consumer would silently accept a malformed buildInfo.buildTimestamp that the
+# PHP (opis) and Kotlin (networknt) consumers reject. Registering the check on
+# our own FormatChecker instance keeps enforcement unconditional.
+_format_checker = jsonschema.FormatChecker()
+
+
+@_format_checker.checks("date-time", raises=ValueError)
+def _is_rfc3339_date_time(instance: object) -> bool:
+    """True iff instance is an RFC 3339 date-time carrying an explicit offset.
+
+    Non-strings pass through — the schema's `type: string` owns that decision.
+    """
+    if not isinstance(instance, str):
+        return True
+    parsed = datetime.fromisoformat(instance.replace("Z", "+00:00"))
+    return parsed.tzinfo is not None
+
 
 # Repo root is three parents up from pipeline/pipeline/songpack/validator.py.
 CANONICAL_SCHEMA_PATH = (
@@ -88,7 +110,10 @@ def load_schema() -> dict[str, Any]:
 def _validate_document(document: Any, schema: dict[str, Any], filename: str) -> list[str]:
     """Validate one document against its $def, returning actionable messages."""
     def_name = PACK_FILE_DEFS[filename]
-    validator = jsonschema.Draft7Validator(schema).evolve(schema=schema["$defs"][def_name])
+    validator = jsonschema.Draft7Validator(
+        schema,
+        format_checker=_format_checker,
+    ).evolve(schema=schema["$defs"][def_name])
     return [
         f"{filename}: {error.message} (at {error.json_path or '/'})"
         for error in validator.iter_errors(document)

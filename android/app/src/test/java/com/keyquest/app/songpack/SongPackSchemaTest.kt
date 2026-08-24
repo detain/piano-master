@@ -69,6 +69,28 @@ class SongPackSchemaTest {
         assertTrue("a note containing a seconds key must be rejected (plan §8.1.1)", violations.isNotEmpty())
     }
 
+    @Test
+    fun unknownKeysAreIgnored() {
+        // plan §8.1.9: additive-only evolution — a pack carrying keys this
+        // consumer does not know about must still validate, so a future format
+        // stays readable by today's app.
+        val manifest = fixtureDoc("pickup_anacrusis", "manifest.json") as ObjectNode
+        manifest.put("futureField", true)
+        assertEquals(
+            "a manifest carrying an unknown key must still validate (forward-compat, plan §8.1.9)",
+            emptySet<Any>(),
+            schema.validate(manifest),
+        )
+
+        val notes = fixtureDoc("pickup_anacrusis", "notes.json")
+        (notes.at("/levels/1/0") as ObjectNode).put("futureNoteField", 1)
+        assertEquals(
+            "a note carrying an unknown key must still validate (forward-compat, plan §8.1.9)",
+            emptySet<Any>(),
+            schema.validate(notes),
+        )
+    }
+
     private fun fixtureDirs(): List<File> {
         val classLoader = requireNotNull(javaClass.classLoader) {
             "app classloader unavailable"

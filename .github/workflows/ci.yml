@@ -309,7 +309,9 @@ jobs:
           copies="$(find . -name 'songpack-v1.json' \
             -not -path './content/schema/*' \
             -not -path '*/node_modules/*' \
-            -not -path '*/vendor/*' || true)"
+            -not -path '*/vendor/*' \
+            -not -path '*/build/*' \
+            -not -path '*/.gradle/*' || true)"
           if [ -n "$copies" ]; then
             for copy in $copies; do
               copy_sha="$(sha256sum "$copy" | cut -d' ' -f1)"
