@@ -4,7 +4,7 @@ Pick-up point for a fresh build-orchestrator session. Read this, plan_piano.md �
 prompt_piano.md, and the SDD ledger (.superpowers/sdd/plan_piano/progress.md) before
 dispatching any work.
 
-## Current state (2026-08-22, HEAD f3cc1f8)
+## Current state (2026-08-24, HEAD d74194d)
 Phase 0 is functionally complete — all six Phase-0 NEXT-WORK items shipped, CI green on
 every commit. The remaining Phase-0 gates are EXTERNAL (hardware / legal / time). The next
 work is Phase 1's hardware-free tracks.
@@ -19,26 +19,17 @@ By workspace:
 - pipeline/: eval harness (mir_eval, pitch tolerance in cents), EngineYinWrapper,
   `pipeline eval` CLI. 9 pytest green.
 - content/ + docs/: P0.8 rights groundwork (checklist + 15 candidates), P0.9 gate draft.
+- content/ + docs/ + pipeline/ + api/ + android/: P1.1 SongPack v1 frozen — docs/specs/songpack-v1.md + canonical schema content/schema/songpack-v1.json + validators in all three consumers (Python/PHP/Kotlin, no drift by construction) + 5 golden fixtures covering the awkward cases + CI drift guard. pytest 30/30, phpunit 31/171, gradle 34 JVM tests, CI green.
 
 ## Next work — Phase 1 hardware-free tracks (in order)
-1. P1.1 SongPack v1 freeze — plan §8.1 + §20 P1.1. Deliverables:
-   - docs/specs/songpack-v1.md (every field, units in beats, required/optional matrix,
-     forward-compat rule).
-   - Canonical JSON Schema at content/schema/songpack-v1.json, consumed by the Python
-     pipeline, the PHP API, and Kotlin tests — one schema, three consumers, no drift
-     (CI job fails on divergence).
-   - 5 golden fixtures covering the awkward cases: pickup bars, mid-song key change,
-     triplets, ties across chunk boundaries, 6/8, a repeat structure.
-   - Versioning/migration policy (additive-only; minAppVersion gates new required behavior).
-   Verify: all fixtures validate; content authored in week 4 loads unmodified at launch.
-2. P1.2 Pipeline CLI v0 — plan §8.2 + §20 P1.2. Deliverables: `pipeline build` stages
+1. P1.2 Pipeline CLI v0 — plan §8.2 + §20 P1.2. Deliverables: `pipeline build` stages
    (ingest+provenance → validate [music21] → normalize [voices→hands, ties, grace,
    ornaments] → auto-chunking suggestions → layout precompute [beam groups, spacing hints,
    note-bar lanes] → audio stems [fluidsynth default, DGX later; EBU R128 −16 LUFS, Opus,
    mic-safe variant] → pack+checksum+manifest), deterministic byte-identical builds,
    bad-input corpus with actionable errors, golden-fixture CI job. Verify: same input →
    byte-identical pack on any machine; malformed MusicXML → specific error, no stack trace.
-3. P1.5 Scoring engine — plan §6 + §20 P1.5. Deliverables: pure-Kotlin module (zero
+2. P1.5 Scoring engine — plan §6 + §20 P1.5. Deliverables: pure-Kotlin module (zero
    Android deps), matching windows (tempo-scaled, beginner widening), chord clustering
    (90ms cluster, partial credit), verdicts + score/stars math (remote-config thresholds),
    per-measure error telemetry, property tests (monotone score, never NaN/>100,
@@ -69,6 +60,7 @@ By workspace:
   --reconnect-check or a manual burst).
 
 ## Open items / known gaps
+- P1.1 SongPack v1 is frozen — format must not change without an ADR + golden-fixture migration (plan §20 P1.1 expectation).
 - Docker bridge networking broken at daemon level (DOCKER-FORWARD missing; root-only fix).
   Workaround: `docker run --network host` for keyquest-mysql + keyquest-dragonfly.
   `docker compose up` keeps failing until a root user fixes dockerd.

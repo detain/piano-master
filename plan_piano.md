@@ -2659,7 +2659,20 @@ real reason the educator is the first hire, not the last.
 ## 24. Build Status Log
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
-> **LATEST (2026-08-22):** Phase-0 complete except external blockers — see the entries below (incl. "(late)" and "(final)"), plus docs/continuation.md (session handoff) and prompt_piano.md (orchestrator prompt). Next work: Phase-1 hardware-free tracks — P1.1 SongPack v1, P1.2 pipeline CLI v0, P1.5 scoring engine.
+> **LATEST (2026-08-24):** P1.1 SongPack v1 frozen (spec + canonical schema + 3-consumer validators + golden fixtures + CI drift guard) — see the entry below. Next work: P1.2 pipeline CLI v0, then P1.5 scoring engine.
+
+### 2026-08-24 — P1.1 SongPack v1 frozen (spec + canonical schema + 3-consumer validators + golden fixtures + CI drift guard)
+**Commits:** `9d1ebd5` (P1.1 main) → `7a82caf` (classloader-warning fix) → `cac560b` (review fixes: date-time enforcement, drift-guard exclusions, forward-compat tests) → `d74194d` (RFC3339 gate tightening). All on master, pushed, remote CI green on every commit (5 jobs).
+**What shipped:**
+- `docs/specs/songpack-v1.md` — the frozen Phase-1 content contract: every field/unit/enum, required/optional matrix, units-in-beats policy (seconds appear nowhere in note data), forward-compat rule (unknown keys ignored; `minAppVersion` gates new required behavior; additive-only; `songpack/v2` parallel; `packVersion` never reused; progress keys on songId+level+chunk), audio stem contract (§8.1.7), one-schema-three-consumers mechanism (§8.1.10).
+- `content/schema/songpack-v1.json` — canonical draft-07 schema with `$defs`; root `oneOf` dispatcher over the four pack documents; `seconds` forbidden on note records via `not:{required:[seconds]}` (unknown keys still accepted = forward-compat); RFC 3339 `date-time` on `buildInfo.buildTimestamp`.
+- Three consumers, one schema, no drift by construction: Python (`pipeline/pipeline/songpack/validator.py` — jsonschema + semantic checks: pickupBeats, tie index/pitch integrity, chunk bounds/count/prereqs, level cross-refs, NaN/Infinity rejected at parse, custom RFC3339 format checker matching opis/networknt; 28 tests), PHP (`api/tests/SongPack/SongPackSchemaTest.php` via opis/json-schema ^2.6 dev — 8 tests/56 assertions; reads the canonical file directly), Kotlin (`android/.../SongPackSchemaTest.kt` via networknt 1.5.6 test-only — Gradle Copy tasks generate test resources from `content/` into gitignored `build/generated/songpack`, so no committed copy can drift; 3 JVM tests).
+- 5 golden fixtures (`content/fixtures/songpack-v1/`) covering all 6 awkward cases: pickup bars, mid-song key change (2 levels), 6/8 + triplets, ties across chunk boundaries, linearized A-B-A repeat + `repeatMap` + forward-compat unknown keys.
+- CI: `lint-all` drift guard (sha256 canonical vs any other `songpack-v1.json`; excludes `build/`/`.gradle/`) + `engine-host-tests` runs the songpack pytest suite.
+**Design decisions frozen (spec §6):** notes.json per-level shape `{"levels": {"1": [...], ...}}` (full note sets, never diffs); skills.json `{"levels": {"1": {"requiredSkills": [...], "taughtSkills": [...]}}}`; buildInfo required; repeats pre-expanded by the pipeline (format is linear; optional `repeatMap` annotation; `loopSafe` chunks).
+**Verified:** pytest 30/30, phpunit 31/171, gradle 34 JVM tests, make lint OK.
+**Review:** APPROVED after two passes (fixed: Python date-time enforcement gap [MAJOR], drift-guard build exclusions, ci.yml EOF newline, PHP+Kotlin forward-compat tests; residual RFC3339 leniency closed in `d74194d`).
+**Next:** P1.2 pipeline CLI v0 (music21 ingest → deterministic pack, bad-input corpus) → P1.5 scoring engine.
 
 ### 2026-08-22 (late) — P0.5 renderer prototype + P0.3.3-partial + soak/drill + MySQL reconnect fix + P0.9 gate draft
 **Commits:** `15af47f` + `d23985b` (P0.5) → `b7b44c8` + `e2ad357` + `7ac461b` (P0.3.3-partial) → `49c143b` (soak/drill results) → `840d566` + `47c92a0` (P0.9 gate draft + revision) → `43ee9a1` (MySQL reconnect fix).
