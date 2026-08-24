@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -32,15 +33,26 @@ import jsonschema
 # our own FormatChecker instance keeps enforcement unconditional.
 _format_checker = jsonschema.FormatChecker()
 
+# Canonical RFC 3339 shape: YYYY-MM-DD'T'HH:MM:SS(.fraction)?(Z|±HH:MM).
+# Python 3.12's lenient fromisoformat also accepts a space separator, a
+# colons-less offset (+0000), and a hours-only offset (+00) — all of which
+# opis/json-schema and networknt reject — so this gate runs BEFORE the parse.
+_RFC3339_DATE_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})")
+
 
 @_format_checker.checks("date-time", raises=ValueError)
 def _is_rfc3339_date_time(instance: object) -> bool:
-    """True iff instance is an RFC 3339 date-time carrying an explicit offset.
+    """True iff instance is a true RFC 3339 date-time carrying an explicit offset.
 
-    Non-strings pass through — the schema's `type: string` owns that decision.
+    Rejects the lenient forms fromisoformat would otherwise accept — a space
+    separator, a colons-less offset, a hours-only offset, and a plain naive
+    date-time — matching opis/networknt exactly. Non-strings pass through —
+    the schema's `type: string` owns that decision.
     """
     if not isinstance(instance, str):
         return True
+    if _RFC3339_DATE_TIME.fullmatch(instance) is None:
+        return False
     parsed = datetime.fromisoformat(instance.replace("Z", "+00:00"))
     return parsed.tzinfo is not None
 

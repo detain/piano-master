@@ -177,6 +177,52 @@ def test_invalid_build_timestamp_is_rejected(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "2026-08-24 00:00:00+00:00",  # space separator instead of T
+        "2026-08-24T00:00:00+0000",   # offset without colon
+        "2026-08-24T00:00:00+00",     # hours-only offset
+        "2026-08-24T00:00:00",        # no offset (naive)
+    ],
+)
+def test_rfc3339_lenient_forms_are_rejected(tmp_path: Path, timestamp: str) -> None:
+    """§8.1.10: Python's fromisoformat would accept these, but opis/networknt
+    reject them — the Python consumer must too, since this format is frozen as
+    the Phase-1 contract."""
+    pack = _copy_fixture(tmp_path, "pickup_anacrusis")
+
+    def _bad_timestamp(doc) -> None:
+        doc["buildInfo"]["buildTimestamp"] = timestamp
+
+    _mutate(pack, "manifest.json", _bad_timestamp)
+    _assert_invalid(
+        validate_pack(pack),
+        "buildTimestamp",
+        f"RFC 3339-invalid buildTimestamp {timestamp!r}",
+    )
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "2026-08-24T00:00:00Z",
+        "2026-08-24T00:00:00.123+00:00",
+    ],
+)
+def test_rfc3339_canonical_timestamps_validate(tmp_path: Path, timestamp: str) -> None:
+    """Canonical RFC 3339 date-times — Z or an explicit offset, optional
+    fractional seconds — must keep validating."""
+    pack = _copy_fixture(tmp_path, "pickup_anacrusis")
+
+    def _good_timestamp(doc) -> None:
+        doc["buildInfo"]["buildTimestamp"] = timestamp
+
+    _mutate(pack, "manifest.json", _good_timestamp)
+    report = validate_pack(pack)
+    assert report.valid, f"valid RFC 3339 buildTimestamp {timestamp!r}; errors: {report.errors}"
+
+
 # ---------------------------------------------------------------------------
 # (c) Forward compatibility: unknown keys are ignored
 # ---------------------------------------------------------------------------
