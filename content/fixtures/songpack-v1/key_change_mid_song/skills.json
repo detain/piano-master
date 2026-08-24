@@ -1,0 +1,23 @@
+{
+  "levels": {
+    "1": {
+      "requiredSkills": [
+        "hand_position_c",
+        "quarter_notes"
+      ],
+      "taughtSkills": [
+        "f_sharp_intro",
+        "key_change_awareness"
+      ]
+    },
+    "2": {
+      "requiredSkills": [
+        "two_hand_coordination"
+      ],
+      "taughtSkills": [
+        "key_change_awareness",
+        "fifths_lh"
+      ]
+    }
+  }
+}

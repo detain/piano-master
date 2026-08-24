@@ -13,6 +13,9 @@
         <testsuite name="integration">
             <directory>tests/Integration</directory>
         </testsuite>
+        <testsuite name="songpack">
+            <directory>tests/SongPack</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

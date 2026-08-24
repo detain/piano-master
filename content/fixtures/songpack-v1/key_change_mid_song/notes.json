@@ -1,0 +1,996 @@
+{
+  "levels": {
+    "1": [
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 72,
+        "staff": 1,
+        "startBeat": 0.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 0.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 1.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 2.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 3.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 4.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 53,
+        "staff": 2,
+        "startBeat": 4.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 5.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 6.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 7.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 8.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 8.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 9.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 84,
+        "staff": 1,
+        "startBeat": 10.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 71,
+        "staff": 1,
+        "startBeat": 12.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 12.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 13.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 14.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 72,
+        "staff": 1,
+        "startBeat": 16.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 16.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 17.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 18.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 19.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 20.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 53,
+        "staff": 2,
+        "startBeat": 20.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 21.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 22.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 23.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 24.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 24.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 25.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 84,
+        "staff": 1,
+        "startBeat": 26.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 28.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 28.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 71,
+        "staff": 1,
+        "startBeat": 29.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 67,
+        "staff": 1,
+        "startBeat": 30.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 32.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 32.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 83,
+        "staff": 1,
+        "startBeat": 33.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 86,
+        "staff": 1,
+        "startBeat": 34.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 83,
+        "staff": 1,
+        "startBeat": 35.0,
+        "voice": 1
+      },
+      {
+        "accidental": "sharp",
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 78,
+        "staff": 1,
+        "startBeat": 36.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 36.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 37.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 84,
+        "staff": 1,
+        "startBeat": 38.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 39.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 83,
+        "staff": 1,
+        "startBeat": 40.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 40.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 86,
+        "staff": 1,
+        "startBeat": 41.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 91,
+        "staff": 1,
+        "startBeat": 42.0,
+        "voice": 1
+      },
+      {
+        "accidental": "sharp",
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 78,
+        "staff": 1,
+        "startBeat": 44.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 50,
+        "staff": 2,
+        "startBeat": 44.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 45.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 46.0,
+        "voice": 1
+      }
+    ],
+    "2": [
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 60,
+        "staff": 1,
+        "startBeat": 0.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 72,
+        "staff": 1,
+        "startBeat": 0.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 0.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 1.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 2.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 2.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 3.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 4.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 53,
+        "staff": 2,
+        "startBeat": 4.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 5.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 6.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 60,
+        "staff": 2,
+        "startBeat": 6.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 7.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 8.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 8.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 9.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 84,
+        "staff": 1,
+        "startBeat": 10.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 10.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 71,
+        "staff": 1,
+        "startBeat": 12.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 12.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 13.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 14.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 62,
+        "staff": 2,
+        "startBeat": 14.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 60,
+        "staff": 1,
+        "startBeat": 16.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 72,
+        "staff": 1,
+        "startBeat": 16.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 16.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 17.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 18.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 18.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 19.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 20.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 53,
+        "staff": 2,
+        "startBeat": 20.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 21.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 22.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 60,
+        "staff": 2,
+        "startBeat": 22.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 77,
+        "staff": 1,
+        "startBeat": 23.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 76,
+        "staff": 1,
+        "startBeat": 24.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 24.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 25.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 84,
+        "staff": 1,
+        "startBeat": 26.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 26.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 28.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 28.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 71,
+        "staff": 1,
+        "startBeat": 29.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 67,
+        "staff": 1,
+        "startBeat": 30.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 62,
+        "staff": 2,
+        "startBeat": 30.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 67,
+        "staff": 1,
+        "startBeat": 32.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 32.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 32.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 83,
+        "staff": 1,
+        "startBeat": 33.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 86,
+        "staff": 1,
+        "startBeat": 34.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 62,
+        "staff": 2,
+        "startBeat": 34.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 83,
+        "staff": 1,
+        "startBeat": 35.0,
+        "voice": 1
+      },
+      {
+        "accidental": "sharp",
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 78,
+        "staff": 1,
+        "startBeat": 36.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 48,
+        "staff": 2,
+        "startBeat": 36.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 37.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 84,
+        "staff": 1,
+        "startBeat": 38.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 38.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 81,
+        "staff": 1,
+        "startBeat": 39.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 83,
+        "staff": 1,
+        "startBeat": 40.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 55,
+        "staff": 2,
+        "startBeat": 40.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 86,
+        "staff": 1,
+        "startBeat": 41.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 91,
+        "staff": 1,
+        "startBeat": 42.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 62,
+        "staff": 2,
+        "startBeat": 42.0,
+        "voice": 1
+      },
+      {
+        "accidental": "sharp",
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 78,
+        "staff": 1,
+        "startBeat": 44.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 4.0,
+        "hand": "L",
+        "pitch": 50,
+        "staff": 2,
+        "startBeat": 44.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 1.0,
+        "hand": "R",
+        "pitch": 74,
+        "staff": 1,
+        "startBeat": 45.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "R",
+        "pitch": 79,
+        "staff": 1,
+        "startBeat": 46.0,
+        "voice": 1
+      },
+      {
+        "durBeats": 2.0,
+        "hand": "L",
+        "pitch": 57,
+        "staff": 2,
+        "startBeat": 46.0,
+        "voice": 1
+      }
+    ]
+  }
+}

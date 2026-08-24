@@ -53,7 +53,7 @@ jobs:
           set -euxo pipefail
           python3 -m venv /tmp/keyquest-eval-venv
           /tmp/keyquest-eval-venv/bin/pip install --quiet \
-            numpy soundfile mir_eval pretty_midi pytest
+            numpy soundfile mir_eval pretty_midi pytest jsonschema
 
       - name: Run EngineYinWrapper integration test
         env:
@@ -62,6 +62,19 @@ jobs:
           set -euxo pipefail
           /tmp/keyquest-eval-venv/bin/pytest \
             pipeline/tests/test_eval_harness.py -k engine_yin -q
+
+      # SongPack v1 (plan §20 P1.1): the Python consumer validates the golden
+      # fixtures + negative/forward-compat cases against the CANONICAL schema.
+      # The other consumers run in their own jobs: PHP in api-tests (phpunit
+      # picks up tests/SongPack), Kotlin in android-unit (testDebugUnitTest
+      # reads the schema via the generated test-resources copy).
+      - name: Run SongPack v1 schema + fixtures validation
+        env:
+          PYTHONPATH: pipeline
+        run: |
+          set -euxo pipefail
+          /tmp/keyquest-eval-venv/bin/pytest \
+            pipeline/tests/test_songpack_validator.py -q
 
   # ---------------------------------------------------------------------------
   # 2. Android unit tests — JVM tests only, no emulator.
@@ -280,3 +293,31 @@ jobs:
             echo "::error::trailing whitespace found — remove it (editorconfig sanity, plan P0.1.3)." >&2
             exit 1
           fi
+
+      - name: SongPack schema drift guard — one canonical file, three consumers
+        run: |
+          set -euxo pipefail
+          # Plan §8.1.10: the canonical schema is content/schema/songpack-v1.json
+          # and every consumer — Python pipeline, PHP API, Kotlin tests — reads
+          # THAT file, never a committed copy. The android consumer's copy is
+          # GENERATED into build/generated/songpack (gitignored, so it never
+          # appears in this fresh checkout); any other songpack-v1.json in the
+          # tree would be drift by construction, so if one exists it must be
+          # byte-identical to the canonical file or this job fails.
+          canonical="content/schema/songpack-v1.json"
+          canonical_sha="$(sha256sum "$canonical" | cut -d' ' -f1)"
+          copies="$(find . -name 'songpack-v1.json' \
+            -not -path './content/schema/*' \
+            -not -path '*/node_modules/*' \
+            -not -path '*/vendor/*' || true)"
+          if [ -n "$copies" ]; then
+            for copy in $copies; do
+              copy_sha="$(sha256sum "$copy" | cut -d' ' -f1)"
+              if [ "$copy_sha" != "$canonical_sha" ]; then
+                echo "::error::SongPack schema drift: $copy differs from canonical $canonical (plan §8.1.10)" >&2
+                exit 1
+              fi
+              echo "OK: $copy is byte-identical to canonical $canonical"
+            done
+          fi
+          echo "OK: no stray songpack-v1.json copies — canonical file is the only source of truth"

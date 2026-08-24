@@ -1,0 +1,100 @@
+[
+  {
+    "chunkId": "c01",
+    "countInBeats": 1,
+    "difficulty": 2,
+    "endBeat": 9.0,
+    "label": "Opening phrases",
+    "loopSafe": true,
+    "newSkills": [
+      "pickup_entries"
+    ],
+    "ord": 1,
+    "prerequisiteChunks": [],
+    "startBeat": 0.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c02",
+    "countInBeats": 4,
+    "difficulty": 3,
+    "endBeat": 17.0,
+    "label": "Descending answer",
+    "loopSafe": true,
+    "newSkills": [],
+    "ord": 2,
+    "prerequisiteChunks": [
+      "c01"
+    ],
+    "startBeat": 9.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c03",
+    "countInBeats": 4,
+    "difficulty": 3,
+    "endBeat": 25.0,
+    "label": "Repeat of opening",
+    "loopSafe": true,
+    "newSkills": [],
+    "ord": 3,
+    "prerequisiteChunks": [
+      "c02"
+    ],
+    "startBeat": 17.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c04",
+    "countInBeats": 4,
+    "difficulty": 4,
+    "endBeat": 33.0,
+    "label": "Closing phrase",
+    "loopSafe": true,
+    "newSkills": [
+      "phrase_ending"
+    ],
+    "ord": 4,
+    "prerequisiteChunks": [
+      "c03"
+    ],
+    "startBeat": 25.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  }
+]

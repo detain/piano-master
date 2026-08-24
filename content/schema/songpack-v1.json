@@ -1,0 +1,604 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://keyquest.dev/schema/songpack-v1.json",
+  "title": "SongPack v1",
+  "description": "Canonical JSON Schema for the KeyQuest SongPack v1 format (plan §8.1; human spec docs/specs/songpack-v1.md). One schema, three consumers — Python pipeline (build-time validation), PHP API (publish-time validation), Kotlin tests (fixture validation) — plan §8.1.10. The root is a oneOf dispatcher over the four JSON-format-contract documents: manifest.json, notes.json, chunks.json, skills.json; consumers validate each whole file against this root. Unknown keys are ignored by clients (additive-only evolution, §8.1.9). The ONLY key explicitly forbidden anywhere is `seconds` on a note record (§8.1.1): beats are the unit of musical time and seconds appear nowhere in note data. NOTE on the forbidden-key pattern: `not: {required: [\"seconds\"]}` is used rather than `not: {properties: {seconds: {}}}` because the latter is vacuously valid for any object WITHOUT a seconds key — a classic draft-07 gotcha — and would reject every note. `required` checks key presence only, so it forbids `seconds` (even `seconds: null`) while leaving additionalProperties open for future keys.",
+  "oneOf": [
+    { "$ref": "#/$defs/manifest" },
+    { "$ref": "#/$defs/notesFile" },
+    { "$ref": "#/$defs/chunksFile" },
+    { "$ref": "#/$defs/skillsFile" }
+  ],
+  "$defs": {
+    "note": {
+      "type": "object",
+      "title": "note",
+      "description": "One note (§8.1.4). Beats are the unit of musical time; seconds appear NOWHERE in note data (§8.1.1). `pitch` is the app's only pitch representation; `accidental` is display-only (pitch is absolute — a client must never derive pitch from key signature + accidental).",
+      "required": ["pitch", "startBeat", "durBeats", "hand", "staff", "voice"],
+      "properties": {
+        "pitch": {
+          "type": "integer",
+          "minimum": 21,
+          "maximum": 108,
+          "description": "MIDI note number, A0 (21) to C8 (108). The app's only pitch representation (§8.1.4)."
+        },
+        "startBeat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Absolute beats from song start, pickup-adjusted (§8.1.4)."
+        },
+        "durBeats": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Duration in beats (§8.1.4)."
+        },
+        "hand": {
+          "enum": ["L", "R"],
+          "description": "Required; never null (§8.2.4). Used by the scorer and by LH/RH hand-isolation practice."
+        },
+        "staff": {
+          "enum": [1, 2],
+          "description": "Visual staff (1 = upper, 2 = lower). NOT always the hand — cross-staff passages are common and normal (§8.1.4)."
+        },
+        "voice": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Voice index within the staff (§8.1.4)."
+        },
+        "finger": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Optional; present only where the lesson teaches fingering (§8.1.4)."
+        },
+        "tieToIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index, within this level's notes array, of the note this note ties INTO — an INDEX reference, never a beat reference (§8.1.4). Must point forward to a later note of the same pitch; the Python validator enforces this. Ties may cross chunk boundaries."
+        },
+        "accidental": {
+          "enum": ["sharp", "flat", "natural", null],
+          "description": "DISPLAY-ONLY; pitch is absolute. A client must never derive pitch from key signature + accidental (§8.1.4)."
+        },
+        "beamGroup": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Precomputed beam-group id (§8.1.4)."
+        },
+        "lane": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Note-bar skin lane assignment (§7.2)."
+        },
+        "xHint": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Precomputed horizontal spacing unit (§8.1.4)."
+        },
+        "isOrnamentExpansion": {
+          "type": "boolean",
+          "default": false,
+          "description": "True for notes generated from a trill/mordent (§8.1.4)."
+        },
+        "scoringWeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 1.0,
+          "description": "Ornament expansions default 0.2; grace notes 0 (§8.1.4)."
+        }
+      },
+      "not": { "required": ["seconds"] },
+      "additionalProperties": true
+    },
+    "chunk": {
+      "type": "object",
+      "title": "chunk",
+      "description": "One chunk definition — the pedagogy, encoded as data (§8.1.5). teachingModes is the whole hands-separate-then-together pedagogy: ordered, the sequence the learner walks.",
+      "required": [
+        "chunkId",
+        "ord",
+        "startBeat",
+        "endBeat",
+        "teachingModes",
+        "waitModeDefault",
+        "prerequisiteChunks",
+        "loopSafe",
+        "countInBeats",
+        "label",
+        "difficulty",
+        "newSkills"
+      ],
+      "properties": {
+        "chunkId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable chunk identifier, unique within the pack (§8.1.5)."
+        },
+        "ord": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based teaching order (§8.1.5)."
+        },
+        "startBeat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Chunk start, absolute beats. The Python validator checks startBeat < endBeat and both within durationBeats."
+        },
+        "endBeat": {
+          "type": "number",
+          "description": "Chunk end, absolute beats; must be > startBeat. The Python validator checks this and that endBeat <= durationBeats."
+        },
+        "teachingModes": {
+          "type": "array",
+          "items": { "enum": ["RH", "LH", "BOTH"] },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Ordered; the sequence the learner walks (§8.1.5)."
+        },
+        "waitModeDefault": {
+          "type": "object",
+          "required": ["RH", "LH", "BOTH"],
+          "properties": {
+            "RH": { "type": "boolean" },
+            "LH": { "type": "boolean" },
+            "BOTH": { "type": "boolean" }
+          },
+          "additionalProperties": true,
+          "description": "Per-mode wait-on-input defaults (§8.1.5)."
+        },
+        "prerequisiteChunks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "chunkIds that must be completed first (§8.1.5)."
+        },
+        "loopSafe": {
+          "type": "boolean",
+          "description": "Can this chunk loop musically without a lead-in? The auto-loop suggestion skips unsafe chunks (§8.1.5)."
+        },
+        "countInBeats": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Click count-in length in beats (§8.1.5)."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable label shown to the user (§8.1.5)."
+        },
+        "difficulty": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Chunk difficulty (§8.1.5)."
+        },
+        "newSkills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Skill ids this chunk teaches (§8.1.5)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "arrangementLevel": {
+      "type": "object",
+      "title": "arrangementLevel",
+      "description": "One arrangement level (§8.1.6). Each level is a separate FULL note set in notes.json, never a diff.",
+      "required": ["level", "name", "difficulty", "tier"],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1 = Essentials, 2 = Intermediate, 3 = Pro (§8.1.6). notes.json/skills.json reference this value as its decimal string, e.g. \"1\"."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "difficulty": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Per-level difficulty (§8.1.6)."
+        },
+        "tier": {
+          "enum": ["free", "premium"],
+          "description": "Free vs premium access tier (§8.1.3)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "tempoMapEntry": {
+      "type": "object",
+      "title": "tempoMapEntry",
+      "required": ["atBeat", "bpm", "curve"],
+      "properties": {
+        "atBeat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Beat at which this tempo change takes effect. The first entry MUST have atBeat 0 (the Python validator enforces it)."
+        },
+        "bpm": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Beats per minute at this point (§8.1.3)."
+        },
+        "curve": {
+          "enum": ["step", "linear"],
+          "description": "step = instant change; linear = rit./accel. ramping to the next entry's bpm (§8.1.3)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "timeSignatureEntry": {
+      "type": "object",
+      "title": "timeSignatureEntry",
+      "required": ["atBeat", "numerator", "denominator"],
+      "properties": {
+        "atBeat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Beat at which this time signature takes effect. Mid-song changes are normal, not exotic (§8.1.3)."
+        },
+        "numerator": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "denominator": {
+          "type": "integer",
+          "enum": [1, 2, 4, 8, 16, 32],
+          "description": "Beat unit as a power of two (§8.1.3)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "keySignatureEntry": {
+      "type": "object",
+      "title": "keySignatureEntry",
+      "required": ["atBeat", "fifths", "mode"],
+      "properties": {
+        "atBeat": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Beat at which this key signature takes effect. Mid-song changes are normal, not exotic (§8.1.3)."
+        },
+        "fifths": {
+          "type": "integer",
+          "minimum": -7,
+          "maximum": 7,
+          "description": "Circle of fifths: 0 = C major / A minor, +1 = G major / E minor, -1 = F major / D minor, etc."
+        },
+        "mode": {
+          "enum": ["major", "minor"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "audioProfile": {
+      "type": "object",
+      "title": "audioProfile",
+      "required": ["codec", "sampleRateHz", "loudnessLufs", "truePeakDbTP", "bitratesKbps"],
+      "properties": {
+        "codec": {
+          "enum": ["opus"],
+          "description": "Audio codec; Opus per §8.1.7."
+        },
+        "sampleRateHz": {
+          "enum": [48000],
+          "description": "48 kHz per §8.1.7."
+        },
+        "loudnessLufs": {
+          "type": "number",
+          "description": "Integrated loudness target, -16 LUFS across the whole catalog (§8.1.7)."
+        },
+        "truePeakDbTP": {
+          "type": "number",
+          "description": "True-peak ceiling, -1 dBTP (§8.1.7)."
+        },
+        "bitratesKbps": {
+          "type": "object",
+          "required": ["full", "micSafe"],
+          "properties": {
+            "full": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Stereo full-mix bitrate (96 kbps default, §8.1.7)."
+            },
+            "micSafe": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Mono mic-safe stem bitrate (64 kbps default, §8.1.7)."
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "buildInfo": {
+      "type": "object",
+      "title": "buildInfo",
+      "description": "Build provenance (§8.1.3). REQUIRED in published packs; golden fixtures carry minimal values. Non-hashed for determinism (§8.2.10), present for support.",
+      "required": ["pipelineVersion", "sourceFileHash", "buildTimestamp", "gitSha"],
+      "properties": {
+        "pipelineVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Pipeline version that built this pack."
+        },
+        "sourceFileHash": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Hash of the source score, e.g. \"sha256:<hex>\"."
+        },
+        "buildTimestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC build time, e.g. \"2026-08-24T00:00:00Z\". Format is advisory in some consumers; the Python validator enforces it via FormatChecker."
+        },
+        "gitSha": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Git SHA of the pipeline workspace at build time."
+        }
+      },
+      "additionalProperties": true
+    },
+    "repeatMapEntry": {
+      "type": "object",
+      "title": "repeatMapEntry",
+      "description": "OPTIONAL manifest metadata describing a linearized repeat structure (§8.2.3). The format is linear: repeat material is already written out as notes, and loopSafe chunks mark what can loop. repeatMap is pure annotation for form visualization.",
+      "required": ["label", "startBeat", "endBeat"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable section label, e.g. \"A\", \"B\", \"A'\"."
+        },
+        "startBeat": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endBeat": {
+          "type": "number",
+          "description": "Must be > startBeat; the Python validator checks this."
+        },
+        "source": {
+          "type": "string",
+          "description": "Optional provenance annotation, e.g. \"main\" or \"repeat-of-A\"."
+        }
+      },
+      "additionalProperties": true
+    },
+    "manifest": {
+      "type": "object",
+      "title": "manifest.json",
+      "description": "Identity, metadata, tempo map, chunk index, rights reference (§8.1.3). All fields are required unless marked optional.",
+      "required": [
+        "format",
+        "songId",
+        "packVersion",
+        "minAppVersion",
+        "title",
+        "composer",
+        "arranger",
+        "genre",
+        "era",
+        "mood",
+        "difficulty",
+        "durationBeats",
+        "durationSecondsAtDefaultTempo",
+        "defaultTempoBpm",
+        "minPracticeTempoPct",
+        "tempoMap",
+        "timeSignatures",
+        "keySignatures",
+        "pickupBeats",
+        "arrangementLevels",
+        "chunkCount",
+        "chunkIndexRef",
+        "rightsRef",
+        "audioProfile",
+        "buildInfo"
+      ],
+      "properties": {
+        "format": {
+          "const": "songpack/v1",
+          "description": "Format identifier. Clients refuse anything else (§8.1.3)."
+        },
+        "songId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier of the song, not the pack (§8.1.3)."
+        },
+        "packVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Increments on every publish, never reused (§8.1.3, §8.1.9)."
+        },
+        "minAppVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Clients below this refuse the pack and prompt to update (§8.1.9)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Optional; most songs have no subtitle."
+        },
+        "composer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arranger": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Always us, always, for public-domain works (§8.1.3)."
+        },
+        "genre": {
+          "enum": ["classical", "folk", "traditional", "children", "etude", "exercise", "jazz", "pop", "contemporary", "other"],
+          "description": "Library browse facet (§9.4). Vocabulary may grow additively; clients must tolerate unknown values."
+        },
+        "era": {
+          "enum": ["renaissance", "baroque", "classical", "romantic", "modern", "contemporary", "traditional", "other"],
+          "description": "Library browse facet (§9.4). Vocabulary may grow additively; clients must tolerate unknown values."
+        },
+        "mood": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["calm", "happy", "sad", "majestic", "playful", "serene", "dramatic", "lyrical", "energetic", "nostalgic", "bright", "tender", "other"]
+          },
+          "description": "Library browse facet (§9.4). Vocabulary may grow additively; clients must tolerate unknown values."
+        },
+        "difficulty": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Song-level difficulty (§8.2.6), human-overridable."
+        },
+        "durationBeats": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total song length in beats, including pickup (§8.1.3). Beat 0 is the first pickup note. Beats are the ONLY time unit in note data (§8.1.1)."
+        },
+        "durationSecondsAtDefaultTempo": {
+          "type": "number",
+          "minimum": 0,
+          "description": "DISPLAY-ONLY (§8.1.1). The single allowed seconds value in the whole pack; clients must never use it for timing."
+        },
+        "defaultTempoBpm": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Tempo at the first tempoMap entry (§8.1.3)."
+        },
+        "minPracticeTempoPct": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Floor for the tempo slider, as a percentage of default tempo (§8.1.3)."
+        },
+        "tempoMap": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/tempoMapEntry" },
+          "description": "Chronologically ordered; the first entry MUST have atBeat 0 (the Python validator enforces it)."
+        },
+        "timeSignatures": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/timeSignatureEntry" },
+          "description": "Chronologically ordered; the first entry defines the opening measure."
+        },
+        "keySignatures": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/keySignatureEntry" },
+          "description": "Chronologically ordered; the first entry defines the opening key."
+        },
+        "pickupBeats": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Anacrusis length in beats (§8.1.3). Getting this wrong offsets the whole song by a beat — the most common single content bug, so the Python validator sanity-checks it against the opening time signature."
+        },
+        "arrangementLevels": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/arrangementLevel" },
+          "description": "At least one arrangement level (§8.1.6)."
+        },
+        "chunkCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of chunks in chunks.json; the Python validator checks it equals len(chunks) (§8.1.3)."
+        },
+        "chunkIndexRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the chunk index record in chunks.json (§8.1.3)."
+        },
+        "rightsRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "FK into the rights record (§8.5.6). Publish is blocked without it (§8.1.3)."
+        },
+        "audioProfile": {
+          "$ref": "#/$defs/audioProfile"
+        },
+        "buildInfo": {
+          "$ref": "#/$defs/buildInfo"
+        },
+        "repeatMap": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/repeatMapEntry" },
+          "description": "OPTIONAL metadata describing a linearized repeat structure (§8.2.3). Additive; clients that do not know it ignore it."
+        }
+      },
+      "additionalProperties": true
+    },
+    "notesFile": {
+      "type": "object",
+      "title": "notes.json",
+      "description": "The note data + layout hints, per arrangement level (§8.1.4, §8.1.6). Each level is a separate FULL note set, never a diff. Keys are the decimal string of arrangementLevels[].level. The levels MAP is deliberately strict (additionalProperties false): its keys are a closed, enumerated key space matching arrangementLevels, so an unknown key there is a content error, not a forward-compatible field; the file itself stays open for future top-level keys.",
+      "required": ["levels"],
+      "properties": {
+        "levels": {
+          "type": "object",
+          "patternProperties": {
+            "^[1-9][0-9]*$": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/note" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "chunksFile": {
+      "type": "array",
+      "title": "chunks.json",
+      "description": "Chunk definitions (§8.1.5). The array is in teaching order; ord is explicit and 1-based. The array index is NOT ord.",
+      "items": { "$ref": "#/$defs/chunk" }
+    },
+    "skillLevel": {
+      "type": "object",
+      "title": "skillLevel",
+      "description": "Skill requirements and teachings for one arrangement level (§8.1.2 skills.json).",
+      "required": ["requiredSkills", "taughtSkills"],
+      "properties": {
+        "requiredSkills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Skill ids the learner must already have to play this level (§8.2.6 level-1 gate)."
+        },
+        "taughtSkills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Skill ids this level teaches. Chunk newSkills entries refine where."
+        }
+      },
+      "additionalProperties": true
+    },
+    "skillsFile": {
+      "type": "object",
+      "title": "skills.json",
+      "description": "Skill requirements/teachings per arrangement level (§8.1.2). Keys are the decimal string of arrangementLevels[].level. As with notes.json, the levels MAP is strict while the file stays open.",
+      "required": ["levels"],
+      "properties": {
+        "levels": {
+          "type": "object",
+          "patternProperties": {
+            "^[1-9][0-9]*$": { "$ref": "#/$defs/skillLevel" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

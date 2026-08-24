@@ -1,0 +1,80 @@
+{
+  "arrangementLevels": [
+    {
+      "difficulty": 4,
+      "level": 1,
+      "name": "Essentials",
+      "tier": "free"
+    },
+    {
+      "difficulty": 5,
+      "level": 2,
+      "name": "Intermediate",
+      "tier": "premium"
+    }
+  ],
+  "arranger": "KeyQuest",
+  "audioProfile": {
+    "bitratesKbps": {
+      "full": 96,
+      "micSafe": 64
+    },
+    "codec": "opus",
+    "loudnessLufs": -16.0,
+    "sampleRateHz": 48000,
+    "truePeakDbTP": -1.0
+  },
+  "buildInfo": {
+    "buildTimestamp": "2026-08-24T00:00:00Z",
+    "gitSha": "0000000",
+    "pipelineVersion": "0.1.0",
+    "sourceFileHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "chunkCount": 3,
+  "chunkIndexRef": "index-v1",
+  "composer": "Anonymous (traditional)",
+  "defaultTempoBpm": 90,
+  "difficulty": 4,
+  "durationBeats": 48.0,
+  "durationSecondsAtDefaultTempo": 32.0,
+  "era": "traditional",
+  "format": "songpack/v1",
+  "genre": "exercise",
+  "keySignatures": [
+    {
+      "atBeat": 0,
+      "fifths": 0,
+      "mode": "major"
+    },
+    {
+      "atBeat": 32,
+      "fifths": 1,
+      "mode": "major"
+    }
+  ],
+  "minAppVersion": 1,
+  "minPracticeTempoPct": 60,
+  "mood": [
+    "bright"
+  ],
+  "packVersion": 1,
+  "pickupBeats": 0.0,
+  "rightsRef": "RIGHTS-FIXTURE-0002",
+  "songId": "kq-fixture-keychange",
+  "subtitle": "mid-song key change study",
+  "tempoMap": [
+    {
+      "atBeat": 0,
+      "bpm": 90,
+      "curve": "step"
+    }
+  ],
+  "timeSignatures": [
+    {
+      "atBeat": 0,
+      "denominator": 4,
+      "numerator": 4
+    }
+  ],
+  "title": "Wandering to G"
+}

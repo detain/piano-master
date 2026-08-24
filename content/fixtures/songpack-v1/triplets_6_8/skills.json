@@ -1,0 +1,14 @@
+{
+  "levels": {
+    "1": {
+      "requiredSkills": [
+        "hand_position_c",
+        "eighth_notes_rh"
+      ],
+      "taughtSkills": [
+        "triplets",
+        "compound_meter_6_8"
+      ]
+    }
+  }
+}

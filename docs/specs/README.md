@@ -5,7 +5,7 @@ against.
 
 | Spec | Status | Location |
 |---|---|---|
-| SongPack v1 (`songpack/v1`) | Planned — authored in Phase 1 (plan §20 P1.1.1) | Prose here; canonical JSON Schema at `/content/schema/songpack-v1.json` (§8.1.10) |
+| SongPack v1 (`songpack/v1`) | Done (P1.1) | `songpack-v1.md`; canonical JSON Schema at `/content/schema/songpack-v1.json` (§8.1.10) |
 | API (OpenAPI) | Planned — Phase 1 | TBD |
 | Curriculum YAML | Defined in plan §8.3.3 | Decisions in `../adr/`; examples live under `/content/curriculum/` |
 

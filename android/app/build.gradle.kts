@@ -4,6 +4,36 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// ---------------------------------------------------------------------------
+// SongPack v1 canonical-schema test resources (plan §8.1.10, §20 P1.1).
+// The Kotlin schema consumer must validate the CANONICAL schema + golden
+// fixtures from content/ — COPIED into a GENERATED (gitignored) dir, never a
+// committed copy, so the three consumers (Python pipeline, PHP API, Kotlin
+// tests) cannot drift by construction. The CI lint-all drift guard fails if
+// any other committed songpack-v1.json appears anywhere in the repo.
+// Declared before `android {}` because the android block references it.
+// ---------------------------------------------------------------------------
+val songpackTestResourcesDir = layout.buildDirectory.dir("generated/songpack")
+
+val copySongpackSchema by tasks.registering(Copy::class) {
+    from(rootProject.projectDir.parentFile.resolve("content/schema"))
+    include("songpack-v1.json")
+    into(songpackTestResourcesDir)
+}
+
+val copySongpackFixtures by tasks.registering(Copy::class) {
+    from(rootProject.projectDir.parentFile.resolve("content/fixtures"))
+    include("songpack-v1/**")
+    into(songpackTestResourcesDir)
+}
+
+// Ensure the copies run before the unit-test resources are processed (the
+// android unit-test task is not a `Test` subtype and the generated dir is
+// consumed by process*UnitTestJavaRes, so wire the dependency there).
+tasks.matching { it.name.startsWith("process") && it.name.endsWith("UnitTestJavaRes") }.configureEach {
+    dependsOn(copySongpackSchema, copySongpackFixtures)
+}
+
 android {
     namespace = "com.keyquest.app"
     compileSdk = 36
@@ -60,6 +90,10 @@ android {
         compose = true
         prefab = true // Oboe ships prefab CMake packages (find_package(oboe))
     }
+
+    // Expose the generated SongPack schema/fixture dir as test resources
+    // (see the copySongpack* tasks at the top of this file).
+    sourceSets["test"].resources.srcDir(songpackTestResourcesDir)
 }
 
 dependencies {
@@ -83,6 +117,10 @@ dependencies {
 
     // Unit tests (JVM).
     testImplementation(libs.junit)
+
+    // SongPack v1 canonical-schema validation (plan §8.1.10, §20 P1.1) — JVM
+    // only. networknt brings jackson-databind + core + annotations transitively.
+    testImplementation(libs.json.schema.validator)
 
     // Instrumented tests (device/emulator).
     androidTestImplementation(libs.androidx.junit.ext)

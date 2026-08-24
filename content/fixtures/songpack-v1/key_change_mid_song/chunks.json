@@ -1,0 +1,76 @@
+[
+  {
+    "chunkId": "c01",
+    "countInBeats": 4,
+    "difficulty": 3,
+    "endBeat": 16.0,
+    "label": "C major: statement",
+    "loopSafe": true,
+    "newSkills": [],
+    "ord": 1,
+    "prerequisiteChunks": [],
+    "startBeat": 0.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c02",
+    "countInBeats": 4,
+    "difficulty": 4,
+    "endBeat": 32.0,
+    "label": "C major: cadence",
+    "loopSafe": true,
+    "newSkills": [
+      "key_change_awareness"
+    ],
+    "ord": 2,
+    "prerequisiteChunks": [
+      "c01"
+    ],
+    "startBeat": 16.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c03",
+    "countInBeats": 4,
+    "difficulty": 5,
+    "endBeat": 48.0,
+    "label": "G major: resolution",
+    "loopSafe": true,
+    "newSkills": [
+      "f_sharp_intro"
+    ],
+    "ord": 3,
+    "prerequisiteChunks": [
+      "c02"
+    ],
+    "startBeat": 32.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  }
+]

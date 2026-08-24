@@ -1,0 +1,52 @@
+[
+  {
+    "chunkId": "c01",
+    "countInBeats": 4,
+    "difficulty": 4,
+    "endBeat": 12.0,
+    "label": "Six-eight swing",
+    "loopSafe": true,
+    "newSkills": [
+      "compound_meter_6_8"
+    ],
+    "ord": 1,
+    "prerequisiteChunks": [],
+    "startBeat": 0.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c02",
+    "countInBeats": 4,
+    "difficulty": 5,
+    "endBeat": 24.0,
+    "label": "Triplet return",
+    "loopSafe": true,
+    "newSkills": [
+      "triplets"
+    ],
+    "ord": 2,
+    "prerequisiteChunks": [
+      "c01"
+    ],
+    "startBeat": 12.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "levels": {
+    "1": {
+      "requiredSkills": [
+        "phrase_playing"
+      ],
+      "taughtSkills": [
+        "form_recognition",
+        "repeat_looping"
+      ]
+    }
+  }
+}

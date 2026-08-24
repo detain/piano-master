@@ -19,6 +19,7 @@
         "workerman/webman-framework": "^2.1"
     },
     "require-dev": {
+        "opis/json-schema": "^2.6",
         "phpunit/phpunit": "^11.0",
         "symfony/var-dumper": "^7.0"
     },

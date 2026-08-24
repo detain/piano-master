@@ -1,0 +1,76 @@
+[
+  {
+    "chunkId": "c01",
+    "countInBeats": 4,
+    "difficulty": 2,
+    "endBeat": 16.0,
+    "label": "A",
+    "loopSafe": true,
+    "newSkills": [],
+    "ord": 1,
+    "prerequisiteChunks": [],
+    "startBeat": 0.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c02",
+    "countInBeats": 4,
+    "difficulty": 3,
+    "endBeat": 32.0,
+    "label": "B",
+    "loopSafe": false,
+    "newSkills": [
+      "phrase_contrast"
+    ],
+    "ord": 2,
+    "prerequisiteChunks": [
+      "c01"
+    ],
+    "startBeat": 16.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  },
+  {
+    "chunkId": "c03",
+    "countInBeats": 4,
+    "difficulty": 2,
+    "endBeat": 48.0,
+    "label": "A again",
+    "loopSafe": true,
+    "newSkills": [
+      "repeat_looping"
+    ],
+    "ord": 3,
+    "prerequisiteChunks": [
+      "c02"
+    ],
+    "startBeat": 32.0,
+    "teachingModes": [
+      "RH",
+      "LH",
+      "BOTH"
+    ],
+    "waitModeDefault": {
+      "BOTH": false,
+      "LH": true,
+      "RH": true
+    }
+  }
+]

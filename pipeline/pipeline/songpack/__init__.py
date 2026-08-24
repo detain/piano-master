@@ -1,0 +1,1 @@
+"""SongPack v1 format tooling (plan §20 P1.1)."""

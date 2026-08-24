@@ -1,0 +1,69 @@
+{
+  "arrangementLevels": [
+    {
+      "difficulty": 3,
+      "level": 1,
+      "name": "Essentials",
+      "tier": "free"
+    }
+  ],
+  "arranger": "KeyQuest",
+  "audioProfile": {
+    "bitratesKbps": {
+      "full": 96,
+      "micSafe": 64
+    },
+    "codec": "opus",
+    "loudnessLufs": -16.0,
+    "sampleRateHz": 48000,
+    "truePeakDbTP": -1.0
+  },
+  "buildInfo": {
+    "buildTimestamp": "2026-08-24T00:00:00Z",
+    "gitSha": "0000000",
+    "pipelineVersion": "0.1.0",
+    "sourceFileHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "chunkCount": 4,
+  "chunkIndexRef": "index-v1",
+  "composer": "Anonymous (traditional)",
+  "defaultTempoBpm": 96,
+  "difficulty": 3,
+  "durationBeats": 33.0,
+  "durationSecondsAtDefaultTempo": 20.625,
+  "era": "traditional",
+  "format": "songpack/v1",
+  "genre": "exercise",
+  "keySignatures": [
+    {
+      "atBeat": 0,
+      "fifths": 0,
+      "mode": "major"
+    }
+  ],
+  "minAppVersion": 1,
+  "minPracticeTempoPct": 60,
+  "mood": [
+    "calm"
+  ],
+  "packVersion": 1,
+  "pickupBeats": 1.0,
+  "rightsRef": "RIGHTS-FIXTURE-0001",
+  "songId": "kq-fixture-pickup",
+  "subtitle": "anacrusis study",
+  "tempoMap": [
+    {
+      "atBeat": 0,
+      "bpm": 96,
+      "curve": "step"
+    }
+  ],
+  "timeSignatures": [
+    {
+      "atBeat": 0,
+      "denominator": 4,
+      "numerator": 4
+    }
+  ],
+  "title": "The Morning Pickup"
+}

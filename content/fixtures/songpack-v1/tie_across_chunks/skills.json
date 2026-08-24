@@ -1,0 +1,14 @@
+{
+  "levels": {
+    "1": {
+      "requiredSkills": [
+        "hand_position_c",
+        "quarter_notes"
+      ],
+      "taughtSkills": [
+        "tie_continuation",
+        "chunk_transition"
+      ]
+    }
+  }
+}
