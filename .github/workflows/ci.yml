@@ -78,7 +78,14 @@ jobs:
 
       # P1.2 pipeline CLI v0 (plan §20 P1.2): the stage suite (repeat
       # state machine, golden-path builds, bad-input corpus, audio stems).
-      # The sine renderer needs only pip deps + the preinstalled ffmpeg.
+      # The sine renderer needs only pip deps + ffmpeg (for loudnorm + Opus);
+      # the runner image does not put ffmpeg on PATH, so install it.
+      - name: Install ffmpeg
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
       - name: Run P1.2 pipeline suite
         env:
           PYTHONPATH: pipeline
