@@ -30,7 +30,10 @@ class SongPackSchemaTest {
     private val mapper = ObjectMapper()
 
     private val schema: JsonSchema by lazy {
-        val bytes = requireNotNull(javaClass.classLoader.getResourceAsStream("songpack-v1.json")) {
+        val classLoader = requireNotNull(javaClass.classLoader) {
+            "app classloader unavailable"
+        }
+        val bytes = requireNotNull(classLoader.getResourceAsStream("songpack-v1.json")) {
             "canonical schema not on the test classpath — did the copySongpackSchema Gradle task run?"
         }.use { it.readBytes() }
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7).getSchema(mapper.readTree(bytes))
@@ -67,7 +70,10 @@ class SongPackSchemaTest {
     }
 
     private fun fixtureDirs(): List<File> {
-        val root = requireNotNull(javaClass.classLoader.getResource("songpack-v1")) {
+        val classLoader = requireNotNull(javaClass.classLoader) {
+            "app classloader unavailable"
+        }
+        val root = requireNotNull(classLoader.getResource("songpack-v1")) {
             "golden fixtures not on the test classpath — did the copySongpackFixtures Gradle task run?"
         }
         return File(root.toURI()).listFiles()?.filter { it.isDirectory }?.sortedBy { it.name }
@@ -75,8 +81,11 @@ class SongPackSchemaTest {
     }
 
     private fun fixtureDoc(fixtureId: String, fileName: String): JsonNode {
+        val classLoader = requireNotNull(javaClass.classLoader) {
+            "app classloader unavailable"
+        }
         val stream = requireNotNull(
-            javaClass.classLoader.getResourceAsStream("songpack-v1/$fixtureId/$fileName"),
+            classLoader.getResourceAsStream("songpack-v1/$fixtureId/$fileName"),
         ) { "missing $fixtureId/$fileName on the test classpath" }
         return stream.use { mapper.readTree(it) }
     }
