@@ -164,6 +164,65 @@ def test_fluidsynth_backend_fails_actionably_when_absent(monkeypatch) -> None:
         renderer._soundfont_check()
 
 
+def _absolute_note_events(midi) -> list[tuple[int, str, int, int]]:
+    """Absolute ticks of every note_on/note_off across the file's tracks."""
+    events = []
+    for channel, track in enumerate(midi.tracks):
+        absolute = 0
+        for message in track:
+            absolute += message.time
+            if message.type in ("note_on", "note_off"):
+                events.append((absolute, message.type, message.note, channel))
+    return events
+
+
+def test_notes_to_midi_places_events_at_correct_absolute_ticks() -> None:
+    """Review M3: the fluidsynth MIDI writer must place note_on/note_off at
+    the correct absolute ticks. Chord tones (same startBeat) must sound at the
+    identical tick, and sequential notes must be spaced by their real
+    duration — the old cursor advanced only to each note START, shifting every
+    following event."""
+    import mido
+
+    def ticks(beats: float) -> int:
+        # Mirrors the writer's beat→tick mapping (beat 0 clamps to 1 tick).
+        return max(1, round(beats * 480))
+
+    renderer = audio_mod.FluidsynthRenderer(soundfont_path=None, expected_sha256=None)
+    tempo_map = [{"atBeat": 0.0, "bpm": 120, "curve": "step"}]
+    notes = [
+        # Chord — two tones at the same startBeat.
+        {"hand": "R", "pitch": 60, "startBeat": 0.0, "durBeats": 1.0},
+        {"hand": "R", "pitch": 64, "startBeat": 0.0, "durBeats": 1.0},
+        # Sequential melody — one quarter note per beat.
+        {"hand": "R", "pitch": 62, "startBeat": 1.0, "durBeats": 1.0},
+        {"hand": "R", "pitch": 65, "startBeat": 2.0, "durBeats": 1.0},
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        midi_path = Path(tmp) / "timing.mid"
+        renderer._notes_to_midi(notes, tempo_map, midi_path)
+        events = [
+            (absolute, message_type, note)
+            for absolute, message_type, note, channel in _absolute_note_events(
+                mido.MidiFile(str(midi_path))
+            )
+            if channel == 0
+        ]
+    # Chord tones at the identical tick, releasing together a duration later;
+    # sequential notes spaced by exactly one beat (480 ticks), each note_off
+    # one duration after its note_on.
+    assert events == [
+        (ticks(0.0), "note_on", 60),
+        (ticks(0.0), "note_on", 64),
+        (ticks(1.0), "note_on", 62),
+        (ticks(0.0) + ticks(1.0), "note_off", 60),
+        (ticks(0.0) + ticks(1.0), "note_off", 64),
+        (ticks(1.0) + ticks(1.0), "note_off", 62),
+        (ticks(2.0), "note_on", 65),
+        (ticks(2.0) + ticks(1.0), "note_off", 65),
+    ]
+
+
 def test_unknown_renderer_is_named_error() -> None:
     with pytest.raises(AudioError, match="unknown renderer"):
         audio_mod.build_renderer(type("C", (), {"renderer": "dgx"})())

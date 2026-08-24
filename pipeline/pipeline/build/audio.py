@@ -645,23 +645,46 @@ class FluidsynthRenderer(AudioRenderer):
                 (n for n in notes if n.get("hand") == channel_hand),
                 key=lambda n: (n["startBeat"], n["pitch"]),
             )
-            cursor = 0
+            # Collect every note_on/note_off at its absolute tick, then emit
+            # in absolute-time order. A per-note on+off pair whose cursor only
+            # tracks the note START shifts everything after the first note:
+            # chord tones land a whole duration apart and sequential notes
+            # accumulate the same error (review M3).
+            events: list[tuple[int, int, Message]] = []
             for note in hand_notes:
                 start_ticks = ticks(note["startBeat"])
                 dur_ticks = ticks(note["durBeats"])
-                tracks[channel].append(
-                    Message(
-                        "note_on",
-                        note=note["pitch"],
-                        velocity=80,
-                        channel=channel,
-                        time=max(0, start_ticks - cursor),
+                events.append(
+                    (
+                        start_ticks,
+                        1,
+                        Message(
+                            "note_on",
+                            note=note["pitch"],
+                            velocity=80,
+                            channel=channel,
+                        ),
                     )
                 )
-                tracks[channel].append(
-                    Message("note_off", note=note["pitch"], velocity=0, channel=channel, time=dur_ticks)
+                events.append(
+                    (
+                        start_ticks + dur_ticks,
+                        0,
+                        Message(
+                            "note_off",
+                            note=note["pitch"],
+                            velocity=0,
+                            channel=channel,
+                        ),
+                    )
                 )
-                cursor = start_ticks
+            # At a shared tick a note_off sorts first, so a same-pitch legato
+            # handoff releases before it retriggers.
+            events.sort(key=lambda event: (event[0], event[1]))
+            cursor = 0
+            for absolute, _, message in events:
+                tracks[channel].append(message.copy(time=max(0, absolute - cursor)))
+                cursor = absolute
         midi.save(str(midi_path))
 
 
