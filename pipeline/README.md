@@ -1,31 +1,100 @@
 # KeyQuest Pipeline
 
-Offline Python content workers that turn MusicXML/MIDI source scores into
-SongPack (the app-native format) — plan §8.2. Runs standalone from the CLI and
-doubles as the CMS's backend: the admin API enqueues a `job_outbox` row, a
-Webman `queue-consumer` invokes the worker, and the CMS polls stage-level
-progress (§8.2.12).
+Offline Python content workers that turn MusicXML source scores into SongPack
+(the app-native format) — plan §8.2. Runs standalone from the CLI and doubles
+as the CMS's backend: the admin API enqueues a `job_outbox` row, a Webman
+`queue-consumer` invokes the worker, and the CMS polls stage-level progress
+(§8.2.12).
 
 ## Purpose
 
 Eleven stages: ingest → validate → normalize → hands+fingering → chunking →
 difficulty → layout → levels → audio → pack → publish. Each stage is a pure
 function `(input artifact, config) → (output artifact, report)`, runnable
-standalone; stage artifacts are cached by input hash so re-runs are cheap.
+standalone; stage artifacts are stored under `content/builds/<song_id>/stage-N/`
+so `--from-stage` re-runs never repeat an expensive render. The v0 contract is
+documented in `docs/specs/pipeline-v0.md`.
 
-## CLI surface (plan §8.2)
+## CLI surface (P1.2, plan §8.2)
 
 ```bash
 pipeline ingest   score.musicxml --song-id fur-elise --source imslp:12345
-pipeline build    fur-elise [--stage N] [--from-stage N] [--level 1,2,3]
-pipeline audio    fur-elise --renderer dgx|fluidsynth [--stems all]
+pipeline build    fur-elise [--from-stage N] [--stage N] [--level 1,2,3]
+                  [--renderer sine|fluidsynth] [--timestamp now] [--strict]
+                  [--tempo BPM] [--title ...] [--composer ...]
+pipeline audio    fur-elise --renderer sine|fluidsynth
 pipeline validate fur-elise --strict
-pipeline diff     fur-elise --against published
+pipeline diff     fur-elise --against other.pack|published
 pipeline publish  fur-elise --env staging|prod
 pipeline batch    --manifest weekly-batch.yaml --parallel 4
+pipeline eval     audio.wav ground_truth.mid   # P0.3.1, unchanged
 ```
 
-Stage dispatch lands in P1; `pipeline --help` already exposes the surface.
+`build` requires the song to have been ingested first; `--from-stage N`
+resumes from the stored intermediate of stage N−1. Stage failures print one
+actionable error to stderr and exit non-zero — no Python stack traces.
+
+Stages in v0:
+
+1. **ingest** — copy the source byte-for-byte into the content store + write
+   provenance; fails without `--source` (§8.2.1).
+2. **validate** — music21 structural/range/musical-sanity checks and the
+   named unsupported-construct enumeration (§8.2.2).
+3. **normalize** — repeat/jump expansion via an explicit state machine,
+   tuplets, grace/ornament expansion, canonical voices, ties, repeatMap
+   (§8.2.3).
+4. **hands** — staff→hand with crossing correction + per-note confidence
+   (fingering is P2).
+5. **chunking** — 2–8 bar phrase suggestions with rationale; never splits a
+   tie; never auto-published (§8.2.5).
+6. **difficulty** — v0 emits difficulty 1 (calibrated scoring is P2).
+7. **layout** — beamGroup/xHint/lane precomputed + per-chunk viewport hints
+   (§8.2.7).
+8. **levels** — single level "1" (Essentials); L2/L3 generation is later.
+9. **audio** — sine renderer (default) or fluidsynth; −16 LUFS/−1 dBTP Opus
+   stems; measured loudness/mic-safe/alignment checks (§8.2.9).
+10. **pack** — deterministic zip (sorted keys, fixed floats, zeroed stamps),
+    validated against the canonical schema before it exists (§8.2.10).
+11. **publish** — pre-publish gate → filesystem catalog + pointer flip;
+    rollback is a pointer flip (§8.2.11, simplified v0).
+
+## Determinism (§8.2.10)
+
+Output must be byte-identical for identical input, so content diffs mean
+something and CDN caching is safe. Required everywhere: sorted JSON keys,
+fixed float formatting (12 decimals), zip entries in sorted order with
+timestamps zeroed, pinned rendering tools, and `buildInfo` (timestamp)
+excluded from the content hash. `buildInfo.buildTimestamp` = `SOURCE_DATE_EPOCH`
+if set, else the fixed sentinel `1970-01-01T00:00:00Z`; `--timestamp now`
+opts into wall-clock time for publishing. The Ogg/Opus muxer's random serial
+number is canonicalized post-encode (lossless, verified). A CI job
+(`engine-host-tests` → Determinism step) builds every golden fixture twice and
+byte-compares the packs.
+
+## Renderer backends (stage 9)
+
+- **sine** (v0 default, CI-safe): deterministic numpy synthesis; needs only
+  the existing pip deps + ffmpeg (preinstalled on CI).
+- **fluidsynth** (code-complete, not exercised here — no sudo): subprocess +
+  `mido`, requires `--soundfont <path>` whose sha256 matches
+  `--soundfont-sha256`. CI must not depend on it.
+
+## v0 scope cuts vs plan §8.2
+
+Calibrated difficulty + skill inference (P2), L2/L3 generation (later),
+fingering (P2), D.S./D.C./Coda expansion (rejected with a named error),
+diatonic ornament neighbors (chromatic used), the DGX renderer, real
+CDN/CMS publish orchestration (v0 = filesystem catalog), `.mxl`/MIDI ingest.
+Full details in `docs/specs/pipeline-v0.md`.
+
+## Bad-input corpus
+
+`pipeline/tests/bad/` holds one small MusicXML per defect class from §8.2.2
+(malformed XML, zero-duration, measure-sum mismatch, no tempo, out-of-range
+pitch, D.S. al Coda, same-pitch same-voice, voice overflow, glissando, cue
+notes, turn ornaments) plus the warning-only chord-span case. Each must
+produce a specific, actionable message with no stack trace. Every content bug
+found downstream becomes a fixture in the same PR.
 
 ## Evaluation harness (plan §20 P0.3.1)
 
@@ -157,10 +226,12 @@ fixture twice on different machines and byte-compares.
 
 ## Stage caching (§8.2.12)
 
-Artifacts are cached by input hash: a 6-minute audio render is never repeated
-because someone fixed a fingering. `--from-stage N` resumes from a stored
-intermediate without re-running the whole pipeline. A killed worker mid-build
-leaves no half-written pack; the job resumes or restarts cleanly.
+Artifacts are stored under `content/builds/<song_id>/stage-N/` (gitignored):
+a 6-minute audio render is never repeated because someone fixed a fingering.
+`--from-stage N` resumes from the stored intermediate without re-running the
+whole pipeline. `KEYQUEST_STORE_DIR` / `KEYQUEST_BUILDS_DIR` /
+`KEYQUEST_CATALOG_DIR` override the default `content/store` / `content/builds`
+/ `content/catalog` for tests and CI.
 
 ## Dev
 

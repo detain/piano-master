@@ -53,7 +53,7 @@ jobs:
           set -euxo pipefail
           python3 -m venv /tmp/keyquest-eval-venv
           /tmp/keyquest-eval-venv/bin/pip install --quiet \
-            numpy soundfile mir_eval pretty_midi pytest jsonschema
+            numpy soundfile mir_eval pretty_midi pytest jsonschema music21
 
       - name: Run EngineYinWrapper integration test
         env:
@@ -75,6 +75,42 @@ jobs:
           set -euxo pipefail
           /tmp/keyquest-eval-venv/bin/pytest \
             pipeline/tests/test_songpack_validator.py -q
+
+      # P1.2 pipeline CLI v0 (plan §20 P1.2): the stage suite (repeat
+      # state machine, golden-path builds, bad-input corpus, audio stems).
+      # The sine renderer needs only pip deps + the preinstalled ffmpeg.
+      - name: Run P1.2 pipeline suite
+        env:
+          PYTHONPATH: pipeline
+        run: |
+          set -euxo pipefail
+          /tmp/keyquest-eval-venv/bin/pytest \
+            pipeline/tests/test_repeat_expansion.py \
+            pipeline/tests/test_build_stages.py \
+            pipeline/tests/test_bad_input.py \
+            pipeline/tests/test_audio_stems.py -q
+
+      # Determinism (plan §8.2.10): build every golden fixture twice into
+      # separate stores/builds dirs and byte-compare the packs. A difference
+      # is real nondeterminism — worth stopping to fix.
+      - name: Determinism — build golden fixtures twice and byte-compare
+        env:
+          PYTHONPATH: pipeline
+        run: |
+          set -euxo pipefail
+          KEYQUEST_STORE_DIR="$RUNNER_TEMP/det-a/store" \
+            KEYQUEST_BUILDS_DIR="$RUNNER_TEMP/det-a/builds" \
+            /tmp/keyquest-eval-venv/bin/python pipeline/scripts/build_golden.py
+          KEYQUEST_STORE_DIR="$RUNNER_TEMP/det-b/store" \
+            KEYQUEST_BUILDS_DIR="$RUNNER_TEMP/det-b/builds" \
+            /tmp/keyquest-eval-venv/bin/python pipeline/scripts/build_golden.py
+          count=0
+          for pack in "$RUNNER_TEMP"/det-a/builds/golden-*/packs/*.pack; do
+            other="${pack/det-a/det-b}"
+            cmp "$pack" "$other"
+            count=$((count + 1))
+          done
+          echo "OK: $count golden packs byte-identical across the two builds"
 
   # ---------------------------------------------------------------------------
   # 2. Android unit tests — JVM tests only, no emulator.

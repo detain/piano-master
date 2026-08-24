@@ -23,6 +23,13 @@
 # --- Content (song build artifacts) ---
 /content/songs/**/audio/
 
+# --- Content (pipeline stores — P1.2) ---
+# Stage-1 source store, stage intermediates + packs, and the publish catalog
+# are all generated artifacts (plan §8.2.1/§8.2.10/§8.2.11).
+/content/store/
+/content/builds/
+/content/catalog/
+
 # --- Editors / OS ---
 .DS_Store
 .idea/
