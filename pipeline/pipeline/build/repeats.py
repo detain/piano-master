@@ -21,17 +21,21 @@ stacks:
 
 1. ``open_starts`` — indices of forward-repeat measures not yet matched by a
    backward repeat (the brackets). A backward repeat pops the top.
-2. ``sections`` — active repeated sections with pass counts. A backward
-   repeat either increments the matching section's pass count (and jumps back
-   when a pass remains) or opens a fresh section.
+2. ``sections`` — active repeated sections with pass counts. A section is
+   pushed when its forward repeat is played (``passes`` = 0 while the first
+   pass is in flight) and matched by its backward repeat, which increments
+   the pass count and jumps back when a pass remains.
 
 Volta membership is checked on every pass after the first: a measure whose
-volta numbers exclude the current pass is skipped (the whole ending group is
-skipped in one jump).
+volta numbers exclude the pass of the section that CONTAINS it is skipped
+(the whole ending group is skipped in one jump). Attribution to the owning
+section — not the top of the stack — is what keeps a first ending nested
+inside an outer repeat on its own pass count.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -56,12 +60,63 @@ class MeasureFlag:
         return bool(self.voltas)
 
 
-def _section_start(flags: list[MeasureFlag], open_starts: list[int]) -> int:
+def _section_start(open_starts: list[int]) -> int:
     """The backward-repeat jump target: the most recent unmatched forward
     repeat, or 0 (the piece start) when no forward repeat is open."""
     if open_starts:
         return open_starts.pop()
     return 0
+
+
+def _warn_voltas_without_repeat(flags: list[MeasureFlag]) -> None:
+    """Warn when a volta ending has no enclosing repeat to distinguish.
+
+    Such endings are played once (their volta numbers are meaningless), which
+    is what the machine would do anyway — but a human score with a stray
+    ``1.``/``2.`` bracket deserves a heads-up, not silence.
+
+    A volta measure is covered when a repeat section contains it or ended
+    before it (the second-ending continuation of a first/second pair).
+    """
+    spans: list[tuple[int, int]] = []
+    open_starts: list[int] = []
+    for i, flag in enumerate(flags):
+        if flag.starts_repeat:
+            open_starts.append(i)
+        if flag.end_repeat_times is not None:
+            start = open_starts.pop() if open_starts else 0
+            spans.append((start, i))
+    for i, flag in enumerate(flags):
+        if not flag.has_volta:
+            continue
+        covered = any(s <= i <= e for s, e in spans) or any(e < i for _, e in spans)
+        if not covered:
+            warnings.warn(
+                f"measure {flag.measure}: volta ending without an enclosing "
+                "repeat — ending numbers ignored",
+                UserWarning,
+                stacklevel=3,
+            )
+
+
+def _bypass_skipped_marker(
+    flags: list[MeasureFlag],
+    index: int,
+    open_starts: list[int],
+) -> None:
+    """Keep the bracket stack consistent when a volta skip bypasses a repeat
+    marker.
+
+    A skipped forward repeat is still the start of the section being repeated,
+    so its bracket is re-pushed for the section's own backward repeat to pop.
+    A skipped backward repeat would have popped its section's bracket — do the
+    pop so the enclosing repeat's end finds the right bracket.
+    """
+    flag = flags[index]
+    if flag.starts_repeat:
+        open_starts.append(index)
+    if flag.end_repeat_times is not None and open_starts:
+        open_starts.pop()
 
 
 def linearize_measures(flags: list[MeasureFlag]) -> tuple[list[int], list[int]]:
@@ -70,6 +125,12 @@ def linearize_measures(flags: list[MeasureFlag]) -> tuple[list[int], list[int]]:
     ``pass_number`` is 1 for first-play material and increments for each
     replay of a repeated section, which is what lets a later stage draw the
     ``repeatMap`` and skip building chunk boundaries across pass changes.
+
+    Sections are pushed when their forward repeat is played (``passes`` = 0
+    while the first pass is in flight) and matched by their backward repeat.
+    Every volta skip is attributed to the section that CONTAINS the skipped
+    measure, so a first ending nested inside an outer repeat keeps its own
+    pass count instead of borrowing the outer section's.
 
     Raises NormalizeError for malformed repeat structures that exceed the
     output cap or use a backward repeat times below 1.
@@ -81,8 +142,37 @@ def linearize_measures(flags: list[MeasureFlag]) -> tuple[list[int], list[int]]:
     sections: list[dict[str, Any]] = []
     index = 0
 
+    _warn_voltas_without_repeat(flags)
+
     def current_pass() -> int:
-        return sections[-1]["passes"] + 1 if sections else 1
+        # The pass reported for output: innermost section with a completed
+        # pass. Fresh first-pass sections report their enclosing section's
+        # replay, keeping the array monotonic per traversal.
+        for section in reversed(sections):
+            if section["passes"] >= 1:
+                return section["passes"] + 1
+        return 1
+
+    def volta_pass(i: int) -> int | None:
+        """The pass of the section that owns measure ``i`` for volta skips.
+
+        Returns ``None`` for first-visit material (no filtering): the first
+        time through, every measure plays regardless of ending numbers.
+        """
+        # A jump back into an open section: its next pass.
+        for section in reversed(sections):
+            if section["start"] == i:
+                return section["passes"] + 1
+        # A forward repeat not yet on the stack starts a fresh section.
+        if flags[i].starts_repeat:
+            return None
+        # The innermost open section containing the measure.
+        for section in reversed(sections):
+            if section["start"] <= i:
+                if section["passes"] == 0:
+                    return None
+                return section["passes"] + 1
+        return None
 
     while index < n:
         if len(order) >= MAX_OUTPUT_MEASURES:
@@ -93,24 +183,28 @@ def linearize_measures(flags: list[MeasureFlag]) -> tuple[list[int], list[int]]:
             )
         flag = flags[index]
 
-        # Volta membership: on a repeated pass, skip measures whose ending
-        # excludes the current pass, jumping the whole ending group.
-        if sections and sections[-1]["has_voltas"]:
-            pass_number = current_pass()
-            if flag.has_volta and pass_number not in flag.voltas:
+        # Volta membership: skip measures whose ending excludes the owning
+        # section's current pass, jumping the whole ending group.
+        if flag.has_volta:
+            pass_number = volta_pass(index)
+            if pass_number is not None and pass_number not in flag.voltas:
                 while (
                     index < n
                     and flags[index].has_volta
-                    and current_pass() not in flags[index].voltas
+                    and (p := volta_pass(index)) is not None
+                    and p not in flags[index].voltas
                 ):
+                    _bypass_skipped_marker(flags, index, open_starts)
                     index += 1
                 continue
 
-        # A forward repeat opens a bracket: the matching backward repeat jumps
-        # back to THIS measure (re-pushing on every pass so nested sections
-        # re-open correctly).
+        # A forward repeat opens a bracket (re-pushed on every pass so nested
+        # sections re-open correctly) and, on a fresh visit, a section whose
+        # first pass is now in flight.
         if flag.starts_repeat:
             open_starts.append(index)
+            if not any(s["start"] == index for s in sections):
+                sections.append({"start": index, "times": None, "passes": 0})
 
         order.append(flag.measure)
         passes.append(current_pass())
@@ -125,24 +219,30 @@ def linearize_measures(flags: list[MeasureFlag]) -> tuple[list[int], list[int]]:
             raise NormalizeError(
                 f"measure {previous.measure}: backward repeat times={times} is invalid"
             )
-        start = _section_start(flags, open_starts)
+        start = _section_start(open_starts)
 
-        if sections and sections[-1]["start"] == start:
-            # Another pass of the section currently on top.
-            sections[-1]["passes"] += 1
-            if sections[-1]["passes"] >= times:
-                sections.pop()
+        matched = next(
+            (k for k, section in enumerate(sections) if section["start"] == start),
+            None,
+        )
+        if matched is not None:
+            # Another pass of the section whose start this repeat matched.
+            # Sections above it are complete (their ends were bypassed by a
+            # volta skip and their pass-2 material just ran out).
+            del sections[matched + 1 :]
+            section = sections[matched]
+            section["times"] = times
+            section["passes"] += 1
+            if section["passes"] >= times:
+                del sections[matched:]
             else:
                 index = start
         else:
-            # A fresh section (either nested or first time through).
-            section = {
-                "start": start,
-                "times": times,
-                "passes": 1,
-                "has_voltas": any(f.has_volta for f in flags[start:index]),
-            }
-            sections.append(section)
+            # A backward repeat with no matching forward bracket: a fresh
+            # section (repeat from the piece start). Inner open sections are
+            # complete — the flow bypassed their ends.
+            sections = [s for s in sections if s["start"] < start]
+            sections.append({"start": start, "times": times, "passes": 1})
             if times <= 1:
                 sections.pop()
             else:

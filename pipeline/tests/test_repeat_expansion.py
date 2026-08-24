@@ -97,6 +97,62 @@ def test_nested_repeats() -> None:
     assert passes == [1, 1, 1, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1]
 
 
+def test_nested_voltas_use_owning_section_pass() -> None:
+    # M0 |: M1 |: M2 :|(2, volta 1) M3 M4 :|(2, volta 2) — the inner first
+    # ending (M1-M2) is judged against the INNER section's pass, so it plays
+    # again on the outer's second pass instead of being skipped like an outer
+    # first ending. Both outer passes play the full [0,1,2,3,4] block.
+    flags = flags_from(
+        [
+            (0, "start", None),
+            (1, "start", None),
+            (2, "end", 2),
+            (3, None, None),
+            (4, "end", 2),
+        ]
+    )
+    flags = voltas(flags, 1, [1, 2])
+    flags = voltas(flags, 2, [3, 4])
+    order, passes = linearize_measures(flags)
+    assert order == [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]
+    assert passes == [1, 1, 1, 2, 2, 2, 2, 2, 2, 2]
+
+
+def test_nested_voltas_previously_capping_now_terminates() -> None:
+    # M0 |: M1 |: M2 M3 :|(2) M4 :|(2) with voltas 1=[M1], 2=[M4] used to
+    # loop past the 2000-measure output cap: the skipped M1 left the inner
+    # bracket stale, so M3's repeat kept matching the wrong section. With the
+    # bracket stack kept consistent by the owning-section attribution, the
+    # expansion terminates: the inner section plays [M1,M2,M3] then [M2,M3]
+    # (M1 is a first ending), and the outer wraps both around M4.
+    flags = flags_from(
+        [
+            (0, "start", None),
+            (1, "start", None),
+            (2, None, None),
+            (3, "end", 2),
+            (4, "end", 2),
+        ]
+    )
+    flags = voltas(flags, 1, [1])
+    flags = voltas(flags, 2, [4])
+    order, passes = linearize_measures(flags)
+    assert order == [0, 1, 2, 3, 2, 3, 4, 0, 1, 2, 3, 2, 3, 4]
+    assert passes == [1, 1, 1, 1, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2]
+
+
+def test_volta_without_open_repeat_warns_and_succeeds() -> None:
+    # A stray ending bracket with no repeat anywhere: the ending numbers are
+    # meaningless, so the measures play once — but the score author deserves a
+    # warning, raised through the warnings module (not printed).
+    flags = flags_from([(1, None, None), (2, None, None), (3, None, None)])
+    flags = voltas(flags, 1, [1, 2])
+    with pytest.warns(UserWarning, match="volta ending without an enclosing repeat"):
+        order, passes = linearize_measures(flags)
+    assert order == [1, 2, 3]
+    assert passes == [1, 1, 1]
+
+
 def test_malformed_double_backward_repeat_hits_cap() -> None:
     # Two consecutive end repeats with no structure loop forever → the cap
     # must fail with an actionable NormalizeError, not hang.
