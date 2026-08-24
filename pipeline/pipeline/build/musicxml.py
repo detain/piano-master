@@ -185,23 +185,26 @@ def _note_records(container, voice_id: int, *, use_offsets: bool) -> list[dict[s
             "offset": offset,
             "voice": voice_id,
             "grace": bool(element.duration.isGrace),
-            "tieType": element.tie.type if element.tie else None,
             "ornaments": sorted(set(ornaments)),
             "beams": _beam_list(element),
             "lyric": getattr(element, "lyric", None),
             "accidental": None,
         }
         if element.isChord:
+            # Ties are per-sub-note: Chord.tie returns the first non-None tie,
+            # which would leak one voice's tie onto every chord tone (review M1).
             for sub_note in element.notes:
                 record = dict(common)
                 record["kind"] = "note"
                 record["pitch"] = sub_note.pitch.midi
                 record["accidental"] = _accidental_name(sub_note.pitch)
+                record["tieType"] = sub_note.tie.type if sub_note.tie else None
                 records.append(record)
         else:
             common["kind"] = "note"
             common["pitch"] = element.pitch.midi
             common["accidental"] = _accidental_name(element.pitch)
+            common["tieType"] = element.tie.type if element.tie else None
             records.append(common)
     return records
 

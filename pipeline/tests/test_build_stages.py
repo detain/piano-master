@@ -176,6 +176,31 @@ def test_chunker_never_splits_a_tie() -> None:
         assert round(chunk["endBeat"], 6) in measure_starts or round(chunk["endBeat"], 6) == round(duration, 6)
 
 
+def test_mixed_tie_chord_only_tied_voice_gets_tie_to_index() -> None:
+    """Review M1: a chord where only the top voice ties across a barline must
+    not leak that tie onto the other chord tones (per-note tie extraction)."""
+    build_full("t-mixed-tie", "mixed_tie_chord", audio=False)
+    notes = read_pack_json("t-mixed-tie", filename="notes.json")["levels"]["1"]
+    # Beat 4.0 is the M2 chord C5+G4+E4+C4 — only C5 (72) ties to M3.
+    chord_tones = [n for n in notes if n["startBeat"] == 4.0]
+    assert {n["pitch"] for n in chord_tones} == {60, 64, 67, 72}
+    tied = [n for n in notes if "tieToIndex" in n]
+    assert [n["pitch"] for n in tied] == [72], "only the tied voice may carry tieToIndex"
+    tie = tied[0]
+    target = notes[tie["tieToIndex"]]
+    assert target["pitch"] == 72
+    assert target["startBeat"] == 8.0  # the M3 stop chord
+    assert tie["tieToIndex"] > notes.index(tie)
+    # The pack validates against the canonical schema + semantic checks.
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        with zipfile.ZipFile(pack_path("t-mixed-tie")) as zf:
+            zf.extractall(tmp)
+        validation = validate_pack(tmp)
+        assert validation.valid, f"mixed_tie_chord: {validation.errors}"
+
+
 def test_repeats_voltas_expand_into_linear_timeline() -> None:
     build_full("t-rep", "repeats_voltas", audio=False)
     doc = read_doc("t-rep", 8)

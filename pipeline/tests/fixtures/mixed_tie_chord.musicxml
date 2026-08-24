@@ -1,0 +1,47 @@
+<!-- P1.2 regression fixture (review M1): a chord where ONLY the top voice
+     (C5) ties across the M2/M3 barline — the lower chord tones re-articulate.
+     Chord.tie would leak the top note's tie onto every chord tone; per-note
+     ties must be read from each Chord.notes sub-note instead. -->
+<score-partwise version="4.0">
+  <part-list>
+    <score-part id="P1"><part-name>Piano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>12</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>120</per-minute></metronome></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>12</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>12</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>12</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch><duration>12</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>24</duration><tie type="start"/><voice>1</voice><type>half</type><notations><tied type="start"/></notations></note>
+      <note><chord/><pitch><step>G</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>C</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>F</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>D</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>24</duration><tie type="stop"/><voice>1</voice><type>half</type><notations><tied type="stop"/></notations></note>
+      <note><chord/><pitch><step>G</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>E</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>C</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><pitch><step>F</step><octave>5</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>A</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>F</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+      <note><chord/><pitch><step>D</step><octave>4</octave></pitch><duration>24</duration><voice>1</voice><type>half</type></note>
+    </measure>
+    <measure number="4">
+      <rest><duration>48</duration><voice>1</voice><type>whole</type></rest>
+    </measure>
+  </part>
+</score-partwise>
