@@ -53,7 +53,7 @@ jobs:
           set -euxo pipefail
           python3 -m venv /tmp/keyquest-eval-venv
           /tmp/keyquest-eval-venv/bin/pip install --quiet \
-            numpy soundfile mir_eval pretty_midi pytest jsonschema music21
+            numpy soundfile mir_eval pretty_midi pytest jsonschema music21 pyyaml
 
       - name: Run EngineYinWrapper integration test
         env:
