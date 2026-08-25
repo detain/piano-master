@@ -4,34 +4,60 @@ Pick-up point for a fresh build-orchestrator session. Read this, plan_piano.md �
 prompt_piano.md, and the SDD ledger (.superpowers/sdd/plan_piano/progress.md) before
 dispatching any work.
 
-## Current state (2026-08-25, HEAD d7e4702)
-Phase 0 is functionally complete — all six Phase-0 NEXT-WORK items shipped, CI green on
-every commit. The remaining Phase-0 gates are EXTERNAL (hardware / legal / time). Phase 1's
-hardware-free tracks are landing: P1.1 SongPack v1 frozen, P1.2 pipeline CLI v0 shipped,
-P1.5 scoring engine shipped. Next: P1.6 lesson player.
+## Current state (2026-08-25 evening, HEAD 323383a — NO commits landed this session)
+P1.6 lesson player: ARCHITECTURE + TOOLCHAIN RESEARCH COMPLETE (full detail in plan §24
+evening entry); implementation NOT started. Working tree = HEAD + ONE untracked file:
+`android/scoring/src/main/kotlin/com/keyquest/scoring/Touchstone.kt` (agent sanity file —
+DELETE it as the first action of the next session; it compiles harmlessly but must not ship).
 
-By workspace:
-- engine/: pitch harness 88/88 (A0–C8), yin_cli, WavReader, NoteEventQueue, OboeInput
-  (Android-only). Host tests green Debug+Release (-Werror).
-- android/: Oboe/JNI bridge → Flow, RECORD_AUDIO, notation prototype (both skins, Bravura,
-  JankStats). assembleDebug + 32 JVM tests green.
-- api/: Webman skeleton, k6 baseline, reload/failover drills, ADR-0002, CacheGuard,
-  MySQL reconnect fix. phpunit 23/115. Soak 23.4M req/1h, 0 err, 0 bleed.
-- pipeline/: eval harness (mir_eval, pitch tolerance in cents), EngineYinWrapper,
-  `pipeline eval` CLI. 9 pytest green.
-- content/ + docs/: P0.8 rights groundwork (checklist + 15 candidates), P0.9 gate draft.
-- content/ + docs/ + pipeline/ + api/ + android/: P1.1 SongPack v1 frozen — docs/specs/songpack-v1.md + canonical schema content/schema/songpack-v1.json + validators in all three consumers (Python/PHP/Kotlin, no drift by construction) + 5 golden fixtures covering the awkward cases + CI drift guard. pytest 30/30, phpunit 31/171, gradle 34 JVM tests, CI green.
-- pipeline/: P1.2 CLI v0 complete — stage framework (ingest→validate→normalize→hands→chunk→layout→levels→audio→pack→publish), deterministic byte-identical packs (9/9 double-build), 12-file bad-input corpus, full §8.2 CLI. pytest 112. Fluidsynth backend code-complete but needs provisioning (no sudo).
-- android/: P1.5 scoring engine complete — pure-Kotlin `:scoring` module (package com.keyquest.scoring, kotlin-jvm 2.2.0, JVM 17, ZERO deps, stdlib only), tempo-scaled matching windows + 90 ms chord clustering (partial credit), PERFECT/GOOD/MISSED/WRONG verdicts, score = min(100, Σw(1+bonus)/Σw) + stars 60/80/95 (remote-config tunable), per-measure error heatmap, TempoMap port + MeasureMapper, TSV replay tool (JavaExec `replay`, not in check), property suite 200 seeds × 8 scenarios. 118 tests / 0 failures (8 classes); LINE coverage 99.42% (2749/2765); jacoco ≥0.95 gate in `:scoring:check`. Spec: docs/specs/scoring-v1.md. Commit d7e4702.
+- Design (in plan §24): `RealtimeScorer` in :scoring — incremental batch-consistent scorer
+  (freeze rule: sessionSeconds > max(closeSeconds[0..k]); frozen verdicts never flip;
+  finalize() == batch Scorer EXACTLY; full API spec + regression tests incl. the
+  tempo-change inversion case + property suite 200 seeds × 8 scenarios).
+  LessonSession (pure Kotlin, app module, frame-driven clock) + SongPack model/loader
+  (org.json + testImplementation org.json:json) + LayoutHintDeriver (fixtures carry no
+  hints) + ProtoScore adapter (rebased beats for renderer) + renderer per-frame feedback
+  state + OnScreenKeyboard (multi-touch → NoteEvent(source=TOUCH) → RealtimeScorer) +
+  NoteVoice seam (SilentVoice stub) + results overlay (stars/score/heatmap/retry/next) +
+  transport (tempo display/pause/loop/progress/skin toggle) + reduced-motion setting.
+  App gains implementation(project(":scoring")); bundle pickup_anacrusis fixture as asset.
+- P1.6 cuts: tempo-change control (P1.8.4), Wait-for-Me (P1.7), count-in (P1.8.2),
+  soundfont voice (P1.8 provisioning), finger badges only when schema `finger` present,
+  no in-lesson score readout.
+- Screenshot tests: **Paparazzi 2.0.0-alpha05** (only line supporting AGP 8.9.1/Gradle
+  8.11.1/Kotlin 2.2.0+compose plugin/Java 21; headless ubuntu-latest; tests in normal
+  `test` source set; goldens src/test/snapshots/; recordPaparazziDebug/verifyPaparazziDebug;
+  default maxPercentDifference 0.01). Gotchas: issue #2342 HandlerThread NoSuchMethodError
+  (our static UI unaffected); record goldens on Linux/JDK21 (cross-OS AA diffs #311).
+  Fallback: Robolectric 4.16.1 + Roborazzi 1.73.0.
 
-## Next work — Phase 1 hardware-free tracks (in order)
-1. P1.6 Lesson player — plan §20 P1.6 (the signature screen, §7). Deliverables: layout +
-   transport bar (P1.6.1), note-bar + staff skins (P1.6.2/P1.6.3), skin toggle mid-lesson
-   (P1.6.4), real-time feedback (P1.6.5), combo counter + juice with reduced-motion setting
-   (P1.6.6), on-screen keyboard zone (P1.6.7), touch input path → `NoteEvent(source=TOUCH)`
-   → the same scorer (P1.6.8), end-of-chunk results screen (P1.6.9). Verify: JVM-testable
-   parts + screenshot tests vs golden SongPacks for both skins; ≥58 fps on the low-end
-   device and feedback within one frame of the scoring verdict measured when devices arrive.
+## Agent-dispatch lesson (CRITICAL — read before dispatching ANYTHING)
+- Write-capable agents (coder, general) return EMPTY results on long one-shot specs
+  (~5–6 KB prompts): task reports "completed", zero files created.
+- A ~600-char sanity task worked instantly (Touchstone.kt).
+- Long task() calls can also drop required JSON keys (description/prompt/subagent_type).
+- RULE: one small step per dispatch (one file, prompt ≤ ~1500 chars); verify via ls/mtime;
+  resume an empty-result task via task_id once, then re-dispatch smaller. Never one-shot
+  a multi-file spec. (This rule cost a full session to learn — follow it.)
+
+## Next work — P1.6 lesson player (in order; small dispatches)
+1. Delete Touchstone.kt.
+2. D1 RealtimeScorer: (a) class file android/scoring/src/main/kotlin/com/keyquest/scoring/RealtimeScorer.kt;
+   (b) unit tests RealtimeScorerTest.kt; (c) property tests RealtimeScorerPropertyTest.kt;
+   (d) `cd android && ./gradlew :scoring:check --no-daemon --stacktrace` — must pass incl.
+   jacoco ≥0.95 LINE gate. Spec: plan §24 evening entry. Review → commit.
+3. D2 SongPack model/loader (com.keyquest.app.songpack; org.json; load golden fixtures via
+   existing generated test resources build/generated/songpack) + LayoutHintDeriver +
+   ProtoScore adapter + LessonSession + ComboTracker + JVM tests. Review → commit.
+4. D3 LessonPlayerScreen UI: transport (tempo display/pause/loop/progress/skin toggle),
+   notation feedback (per-frame verdict state + hit pop, zero-alloc; reduced-motion
+   color-only), OnScreenKeyboard (Canvas multi-touch; glow lead ~1 beat; wrong-key flash;
+   expected-key pulse), ResultsOverlay, NoteVoice seam, bundle pickup_anacrusis asset,
+   MainActivity → LessonPlayerScreen. Review → commit.
+5. D4 Paparazzi 2.0.0-alpha05 screenshots vs golden fixtures (both skins + keyboard +
+   results) + CI android-unit += :app:verifyPaparazziDebug. RECORD goldens on this Linux
+   server (same JDK 21 as CI). Review → commit.
+6. Docs: ledger + plan §24 + continuation + prompt update; push to origin/master.
 
 ## Hardware-gated work (when the 5 phones / DGX-520 / MIDI keyboards arrive)
 - P0.4 MIDI (USB host + BLE): MidiManager enumeration, running status, NoteOn-vel-0-as-off,
@@ -57,8 +83,16 @@ By workspace:
   --reconnect-check or a manual burst).
 
 ## Open items / known gaps
-- P1.1 SongPack v1 is frozen — format must not change without an ADR + golden-fixture migration (plan §20 P1.1 expectation).
-- Pipeline v0 scope cuts (docs/specs/pipeline-v0.md): calibrated difficulty, L2/L3 generation, fingering, D.S./D.C. rejection, DGX renderer, CDN publish — all deferred; fluidsynth backend awaits provisioning (apt needs sudo).
+- P1.6 design open questions (decide during implementation, document in §24):
+  (a) combo counts per-note in freeze order (a 3-tone chord adds +3) — revisit with
+  dogfooding; (b) hit feedback colors at window close (≤180ms late at ref tempo) — meets
+  "within one frame of the verdict"; (c) loop = reset-and-replay pass (events cleared);
+  (d) session clock = frame clock for ALL sources (mic/MIDI clock alignment is P1.8).
+- P1.1 SongPack v1 is frozen — format must not change without an ADR + golden-fixture
+  migration (plan §20 P1.1 expectation).
+- Pipeline v0 scope cuts (docs/specs/pipeline-v0.md): calibrated difficulty, L2/L3
+  generation, fingering, D.S./D.C. rejection, DGX renderer, CDN publish — all deferred;
+  fluidsynth backend awaits provisioning (apt needs sudo).
 - Docker bridge networking broken at daemon level (DOCKER-FORWARD missing; root-only fix).
   Workaround: `docker run --network host` for keyquest-mysql + keyquest-dragonfly.
   `docker compose up` keeps failing until a root user fixes dockerd.
@@ -85,10 +119,12 @@ Java 21, cmake 3.28.3 (/usr/bin; broken pip shims removed), g++ 13/ninja, ffmpeg
 k6 v2.2.0 (~/bin). Python 3.13 base; pipeline .venv = Python 3.12.12 (from conda ai env
 /home/my/miniconda3/envs/ai). Android SDK /home/my/android-sdk (platform 36, build-tools
 34/35/36, NDK 27.3.13750724). gh authed as detain. Remote git@github.com:detain/piano-master.
+NOTE: record Paparazzi goldens on THIS server (Linux, JDK 21 — matches CI ubuntu-latest).
 
 ## Discipline (non-negotiable)
 - Review loop after EVERY task: reviewer agent → fix until APPROVE.
 - Trunk-based; commits on master; CI (5 jobs: engine-host-tests, android-unit, api-tests,
   cms-build, lint-all) is the gate; push to origin/master.
 - Never run two implementers on the same workspace in parallel.
+- Dispatch rule: ONE small step per agent call (prompt ≤ ~1500 chars); verify via ls/mtime.
 - Maintain the ledger + plan §24 + docs/continuation.md + prompt_piano.md as work lands.
