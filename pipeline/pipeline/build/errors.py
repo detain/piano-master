@@ -46,6 +46,14 @@ class NormalizeError(PipelineError):
     """Stage 3 failure — a construct has no defined normalization."""
 
 
+class HandsError(PipelineError):
+    """Stage 4 failure — hand assignment has nothing to work with."""
+
+
+class StrictError(PipelineError):
+    """Build gate failure — a --strict build hit a stage warning."""
+
+
 class AudioError(PipelineError):
     """Stage 9 failure — a rendered stem failed a measured check."""
 

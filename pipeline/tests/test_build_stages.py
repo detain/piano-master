@@ -341,6 +341,30 @@ def test_audio_stems_in_pack(monkeypatch) -> None:
         assert manifest["audioProfile"]["loudnessLufs"] == -16.0
 
 
+def test_batch_continues_past_a_failed_song(tmp_path) -> None:
+    """Review M11: a per-song pipeline failure must not abort the batch — the
+    failed song is reported FAILED and the healthy song still builds."""
+    import argparse
+
+    from pipeline.cli import _cmd_batch
+
+    BAD = Path(__file__).resolve().parent / "bad"
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(
+        "songs:\n"
+        f"  - songId: batch-good\n"
+        f"    source: {FIXTURES / 'pickup.musicxml'}\n"
+        "    sourceRef: test:batch-good\n"
+        f"  - songId: batch-bad\n"
+        f"    source: {BAD / 'measure_sum_mismatch.musicxml'}\n"
+        "    sourceRef: test:batch-bad\n",
+        encoding="utf-8",
+    )
+    rc = _cmd_batch(argparse.Namespace(manifest=str(manifest), parallel=1))
+    assert rc == 1  # one song failed, one succeeded
+    assert pack_path("batch-good").is_file(), "the healthy song must still build"
+
+
 def test_publish_requires_provenance_and_gate(monkeypatch) -> None:
     import tempfile
 
@@ -364,3 +388,101 @@ def test_publish_requires_provenance_and_gate(monkeypatch) -> None:
         doc_pub, report = run_stage("t-pub", 11, stage_fns()[11], pub_config, previous_doc=doc10)
         assert report.errors == []
         assert doc_pub["published"]["env"] == "staging"
+
+
+def test_strict_build_fails_on_warnings() -> None:
+    """Review M5: --strict must fail the build on the first stage warning;
+    without it the same input builds fine."""
+    from pipeline.build.errors import StrictError
+    from pipeline.build.stage_ingest import run_ingest
+    from pipeline.build.runner import persist_stage_1
+
+    BAD = Path(__file__).resolve().parent / "bad"
+    config = BuildConfig(song_id="t-strict").with_paths()
+    doc, report = run_ingest(
+        BAD / "chord_span.musicxml", "t-strict", "test:chord_span", config=config
+    )
+    persist_stage_1("t-strict", doc, report)
+    fns = {key: fn for key, fn in stage_fns().items() if key != 9}
+
+    # Without strict: the stage-2 warning is reported but the build proceeds.
+    loose = BuildConfig(song_id="t-strict").with_paths()
+    reports = run_stages(loose, fns, from_stage=2, to_stage=10)
+    assert any(report.warnings for report in reports)
+
+    # With strict: the same warning fails the build with a named error.
+    strict = BuildConfig(song_id="t-strict", strict=True).with_paths()
+    with pytest.raises(StrictError, match="strict build: stage validate"):
+        run_stages(strict, fns, from_stage=2, to_stage=10)
+
+
+def test_from_stage_exact_intermediate_required() -> None:
+    """Review M8: --from-stage N must fail loudly when the exact N-1
+    intermediate is missing — never silently downgrade to an older one."""
+    from pipeline.build.errors import PipelineError
+
+    config = ingest("t-exact", "pickup")
+    run_stages(config, stage_fns(), from_stage=2, to_stage=4)
+    with pytest.raises(PipelineError, match="intermediate for stage 5"):
+        run_stages(config, stage_fns(), from_stage=6, to_stage=6)
+
+
+def test_from_stage_resume_nearest_walks_back() -> None:
+    """Review M8: --resume-nearest keeps the documented walk-to-nearest
+    behavior when the exact intermediate is missing."""
+    config = ingest("t-nearest", "pickup")
+    run_stages(config, stage_fns(), from_stage=2, to_stage=3)
+    # Stage 4 (hands) never ran; resume-nearest must fall back to stage 3.
+    run_stages(config, stage_fns(), from_stage=5, to_stage=5, resume_nearest=True)
+    assert stage_dir("t-nearest", 5).joinpath("song.json").is_file()
+
+
+def test_chord_tones_share_beam_group() -> None:
+    """Review M10: notes at the same startBeat (chord tones) must share one
+    beamGroup, while a later note starts a new group."""
+    from pipeline.build.stage_layout import assign_layout
+
+    notes = [
+        {"pitch": 60, "voice": 1, "staff": 1, "startBeat": 0.0, "durBeats": 0.5, "_seq": 0},
+        {"pitch": 64, "voice": 1, "staff": 1, "startBeat": 0.0, "durBeats": 0.5, "_seq": 1},
+        {"pitch": 67, "voice": 1, "staff": 1, "startBeat": 0.0, "durBeats": 0.5, "_seq": 2},
+        {"pitch": 62, "voice": 1, "staff": 1, "startBeat": 1.0, "durBeats": 0.5, "_seq": 3},
+    ]
+    assign_layout(notes)
+    chord_groups = {note["beamGroup"] for note in notes[:3]}
+    assert len(chord_groups) == 1, f"chord tones split across beam groups: {chord_groups}"
+    assert notes[3]["beamGroup"] != notes[0]["beamGroup"]
+
+
+def test_pack_write_is_atomic(monkeypatch) -> None:
+    """Review M6: a failed zip write must never leave a partial pack at the
+    final path — the previous pack survives and no temp file is left behind."""
+    import tempfile
+
+    from pipeline.build.errors import PackError
+    from pipeline.build.runner import load_song_doc, stage_song_path
+    from pipeline.build.stage_pack import run_stage_pack
+
+    with tempfile.TemporaryDirectory() as builds:
+        monkeypatch.setenv("KEYQUEST_BUILDS_DIR", builds)
+        config = ingest("t-atomic", "pickup")
+        fns = {key: fn for key, fn in stage_fns().items() if key != 9}
+        run_stages(config, fns, from_stage=2, to_stage=8)
+        doc8 = load_song_doc(stage_song_path("t-atomic", 8))
+
+        # A healthy first pack exists at the final path.
+        run_stage("t-atomic", 10, stage_fns()[10], config, previous_doc=doc8)
+        final_pack = pack_path("t-atomic")
+        before = final_pack.read_bytes()
+
+        # Force the zip write to fail: the final path must keep the old pack
+        # byte-for-byte, and the temp file must be cleaned up.
+        def boom(*args, **kwargs):
+            raise PackError("simulated disk failure")
+
+        monkeypatch.setattr("pipeline.build.stage_pack.write_zip_deterministic", boom)
+        with pytest.raises(PackError, match="simulated disk failure"):
+            run_stage("t-atomic", 10, stage_fns()[10], config, previous_doc=doc8)
+
+        assert final_pack.read_bytes() == before
+        assert list(final_pack.parent.glob("*.tmp")) == []

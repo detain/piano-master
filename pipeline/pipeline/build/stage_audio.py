@@ -100,21 +100,24 @@ def run_stage_audio(
     # transition. Up to 3 references.
     tempo_map = doc["metadata"]["tempoMap"]
     seconds = audio_mod.beat_to_seconds([n["startBeat"] for n in notes], tempo_map)
+    durations = audio_mod.note_durations_seconds(
+        [n["startBeat"] for n in notes], [n["durBeats"] for n in notes], tempo_map
+    )
     candidates = sorted(
-        (n["startBeat"], seconds[i], n["durBeats"]) for i, n in enumerate(notes) if seconds[i] >= 0.0
+        (n["startBeat"], seconds[i], durations[i]) for i, n in enumerate(notes) if seconds[i] >= 0.0
     )
     gap = 0.0
     selected: list[float] = []
     for pos, (_, sec, dur) in enumerate(candidates):
         if pos == 0:
             selected.append(sec)
-            gap = sec + dur * 60.0 / tempo_map[0]["bpm"]
+            gap = sec + dur
             continue
         if sec - gap >= 0.08 and len(selected) < 3:
             selected.append(sec)
-            gap = sec + dur * 60.0 / tempo_map[0]["bpm"]
+            gap = sec + dur
         elif sec > gap:
-            gap = sec + dur * 60.0 / tempo_map[0]["bpm"]
+            gap = sec + dur
     # Always include the last note when it is well separated from the last
     # selected one (catches cumulative drift in the fluidsynth path).
     if candidates and len(selected) < 3 and candidates[-1][1] - selected[-1] >= 0.08:

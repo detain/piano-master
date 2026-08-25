@@ -12,6 +12,7 @@ no sudo) — its test asserts the actionable failure when the binary is absent.
 
 from __future__ import annotations
 
+import math
 import os
 import tempfile
 import zipfile
@@ -239,3 +240,35 @@ def test_beat_to_seconds_follows_tempo_map() -> None:
     assert seconds[1] == pytest.approx(2.0)
     assert seconds[2] == pytest.approx(4.0)
     assert seconds[3] == pytest.approx(8.0)
+
+
+def test_note_duration_integrates_constant_tempo_map() -> None:
+    """Review M4: a constant tempo map yields beats * 60/bpm."""
+    tempo_map = [{"atBeat": 0.0, "bpm": 120, "curve": "step"}]
+    durations = audio_mod.note_durations_seconds([0.0, 2.0], [4.0, 0.5], tempo_map)
+    assert durations[0] == pytest.approx(2.0)
+    assert durations[1] == pytest.approx(0.25)
+
+
+def test_note_duration_integrates_step_change_mid_note() -> None:
+    """Review M4: a note spanning a step tempo change gets the integrated
+    length — 1 beat at 120 bpm + 1 beat at 60 bpm."""
+    tempo_map = [
+        {"atBeat": 0.0, "bpm": 120, "curve": "step"},
+        {"atBeat": 4.0, "bpm": 60, "curve": "step"},
+    ]
+    # Note from beat 3 to 5: [3,4] at 120 (0.5 s) + [4,5] at 60 (1.0 s).
+    assert audio_mod.note_durations_seconds([3.0], [2.0], tempo_map)[0] == pytest.approx(1.5)
+
+
+def test_note_duration_integrates_linear_curve() -> None:
+    """Review M4: a linear tempo entry integrates piecewise; the note that
+    spans the ramp [2,4] is 4*ln(1.5) seconds, the constant-60 tail is 2 s."""
+    tempo_map = [
+        {"atBeat": 0.0, "bpm": 120, "curve": "linear"},
+        {"atBeat": 4.0, "bpm": 60, "curve": "step"},
+    ]
+    expected = 4.0 * math.log(1.5) + 2.0
+    assert audio_mod.note_durations_seconds([2.0], [4.0], tempo_map)[0] == pytest.approx(expected)
+    # The onset of beat 4 under the ramp is 4*ln(2), not the step-curve 2.0 s.
+    assert audio_mod.beat_to_seconds([4.0], tempo_map)[0] == pytest.approx(4.0 * math.log(2.0))

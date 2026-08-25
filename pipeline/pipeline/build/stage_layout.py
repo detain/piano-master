@@ -31,26 +31,27 @@ def _infer_beam_groups(notes: list[dict[str, Any]]) -> None:
     MusicXML beams (stage 3 stores beam numbers) would override this; v0
     currently derives the group from rhythm alone because the extraction does
     not carry beams through (documented). Group id: sequential per voice,
-    restarting at each strong beat (offset % 1.0 == 0).
+    restarting at each new beat. Chord tones at the SAME startBeat share one
+    beam group (review M10).
     """
     for voice, staff in sorted({(n["voice"], n["staff"]) for n in notes}):
         group = 0
-        current_beat = -1.0
+        current_beat_floor = -1
         in_group = False
         for note in sorted(
             [n for n in notes if n["voice"] == voice and n["staff"] == staff],
             key=lambda n: (n["startBeat"], n["_seq"]),
         ):
-            beat = round(note["startBeat"] % 1.0, 9)
             if note["durBeats"] >= 1.0:
                 note["beamGroup"] = 0
                 in_group = False
                 continue
-            if not in_group or beat <= current_beat:
+            beat_floor = int(round(note["startBeat"], 9))
+            if not in_group or beat_floor != current_beat_floor:
                 group += 1
                 in_group = True
             note["beamGroup"] = group
-            current_beat = beat
+            current_beat_floor = beat_floor
 
 
 def assign_layout(notes: list[dict[str, Any]]) -> None:

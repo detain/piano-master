@@ -22,6 +22,7 @@ Determinism rules:
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -179,16 +180,28 @@ def run_stage_pack(
         }
         entries["checksums.json"] = canonical_json_bytes(checksums)
 
-        pack_dir = pack_path(config.song_id, config.pack_version)
-        pack_dir.parent.mkdir(parents=True, exist_ok=True)
-        write_zip_deterministic(pack_dir, entries.items())
-        digest = sha256_file(pack_dir)
+        pack_path_final = pack_path(config.song_id, config.pack_version)
+        pack_path_final.parent.mkdir(parents=True, exist_ok=True)
+        # Write to a temp file in the SAME directory then atomically replace,
+        # so a failed/interrupted write never leaves a partial pack at the
+        # final path (review M6) and the previous pack survives intact.
+        fd, tmp_name = tempfile.mkstemp(
+            dir=pack_path_final.parent, prefix=f".{pack_path_final.name}.", suffix=".tmp"
+        )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        try:
+            write_zip_deterministic(tmp_path, entries.items())
+            os.replace(tmp_path, pack_path_final)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+        digest = sha256_file(pack_path_final)
 
     doc["pack"] = {
-        "path": str(pack_dir),
+        "path": str(pack_path_final),
         "sha256": digest,
         "fileCount": len(entries),
-        "sizeBytes": pack_dir.stat().st_size,
+        "sizeBytes": pack_path_final.stat().st_size,
         "packVersion": config.pack_version,
         "contentHash": content_hash(doc, config),
     }
@@ -202,7 +215,7 @@ def run_stage_pack(
             "buildTimestamp": build_timestamp(config.timestamp_mode),
         }
     )
-    report.note(f"pack {pack_dir.name} written ({doc['pack']['sizeBytes']} bytes, {digest})")
+    report.note(f"pack {pack_path_final.name} written ({doc['pack']['sizeBytes']} bytes, {digest})")
     report.note(
         f"buildTimestamp is {build_timestamp(config.timestamp_mode)} — deterministic "
         "unless SOURCE_DATE_EPOCH is set or --timestamp now is passed"

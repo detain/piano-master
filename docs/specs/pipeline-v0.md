@@ -112,7 +112,10 @@ stores and `cmp`s the packs (`pipeline/scripts/build_golden.py`).
 - **`sine` (v0 default)** — deterministic numpy synthesis, no new pip deps:
   RH and LH stems from the hand field, full mix, a mic-safe pad (3.2 kHz sine
   whose amplitude follows note density — no energy in 80 Hz–2 kHz), and a
-  count-in click at the default tempo. Then, per stem: ffmpeg two-pass
+  count-in click at the default tempo. Note onsets AND durations come from
+  integrating the tempo map over each note's beat span (step and linear curves
+  both integrate piecewise), so a note crossing a tempo change renders at its
+  true length. Then, per stem: ffmpeg two-pass
   loudnorm to −16 LUFS / −1 dBTP, Opus encode (48 kHz; stereo 96 kbps full
   mixes, mono 64 kbps mic-safe), Ogg canonicalization, and three measured
   checks that **fail the build**:

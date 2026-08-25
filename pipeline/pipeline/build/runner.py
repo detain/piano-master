@@ -28,7 +28,7 @@ from pipeline.build.config import (
     stage_song_path,
 )
 from pipeline.build.determinism import write_json_deterministic
-from pipeline.build.errors import CliError, PipelineError
+from pipeline.build.errors import CliError, PipelineError, StrictError
 
 SONG_DOC_SCHEMA = "keyquest/songdoc-v0"
 
@@ -132,10 +132,28 @@ def run_stages(
     *,
     from_stage: int = 1,
     to_stage: int = BUILD_LAST_STAGE,
+    resume_nearest: bool = False,
 ) -> list[StageReport]:
     """Run stages ``from_stage..to_stage`` inclusive, resuming from stored
-    intermediates. Returns the reports; raises PipelineError on first error."""
+    intermediates. Returns the reports; raises PipelineError on first error.
+
+    ``--from-stage N`` means EXACTLY stage N: the stored intermediate of stage
+    N−1 must exist, else the run fails loudly instead of silently resuming
+    from an older one (review M8). Pass ``resume_nearest=True`` to opt back
+    into the walk-to-the-nearest-intermediate behavior.
+    """
     config = config.with_paths()
+    if not resume_nearest and from_stage > 1:
+        previous_stage = from_stage - 1
+        previous_path = stage_song_path(config.song_id, previous_stage)
+        if not previous_path.is_file():
+            raise PipelineError(
+                f"cannot resume at stage {from_stage}: the stored intermediate for "
+                f"stage {previous_stage} is missing ({previous_path}) — re-run from "
+                "stage 1, or pass --resume-nearest to continue from the nearest "
+                "earlier intermediate",
+                stage="runner",
+            )
     reports: list[StageReport] = []
     for stage in range(from_stage, to_stage + 1):
         if stage not in stage_fns:
@@ -150,6 +168,14 @@ def run_stages(
             if len(report.errors) > 1:
                 detail = f"{detail} (+{len(report.errors) - 1} more)"
             raise PipelineError(detail, stage=STAGE_NAMES.get(stage, str(stage)))
+        if config.strict and report.warnings:
+            first = report.warnings[0]
+            more = f" (+{len(report.warnings) - 1} more)" if len(report.warnings) > 1 else ""
+            raise StrictError(
+                f"strict build: stage {report.name} reported {len(report.warnings)} "
+                f"warning(s): {first}{more}",
+                stage=STAGE_NAMES.get(stage, str(stage)),
+            )
     return reports
 
 

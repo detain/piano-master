@@ -143,3 +143,24 @@ def test_missing_ingest_fails_actionably() -> None:
 
     with pytest.raises(CliError, match="not ingested yet"):
         ensure_ingested("never-ingested", BuildConfig(song_id="never-ingested").with_paths())
+
+
+def test_eval_cli_fails_without_stack_trace(tmp_path) -> None:
+    """Review M9: `pipeline eval` must go through the same CLI error boundary
+    as every other command — a missing file prints one actionable stderr line,
+    never a Python traceback."""
+    env = dict(os.environ)
+    proc = subprocess.run(
+        [
+            sys.executable, "-m", "pipeline.cli", "eval",
+            str(tmp_path / "missing.wav"), str(tmp_path / "missing.mid"),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert proc.returncode != 0
+    assert "Traceback" not in proc.stderr
+    assert len(proc.stderr.strip().splitlines()) == 1
+    assert "missing.mid" in proc.stderr or "missing.wav" in proc.stderr

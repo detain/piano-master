@@ -149,7 +149,8 @@ def _cmd_build(args: argparse.Namespace) -> int:
     if from_stage < 2:
         raise CliError("build --from-stage must be >= 2 (stage 1 is ingest; run `pipeline ingest` first)")
     reports = runner_mod.run_stages(
-        config, stage_fns, from_stage=from_stage, to_stage=to_stage
+        config, stage_fns, from_stage=from_stage, to_stage=to_stage,
+        resume_nearest=bool(getattr(args, "resume_nearest", False)),
     )
     for report in reports:
         _print_report(report)
@@ -289,7 +290,16 @@ def _cmd_batch(args: argparse.Namespace) -> int:
                 runner_mod.run_stage(song_id, 11, stage_fns[11], pub_config, previous_doc=previous)
             return song_id, "OK"
         except PipelineError as exc:
+            # An expected pipeline failure fails THIS song only; the batch
+            # continues with the rest (review M11).
             return song_id, f"FAILED: {exc.render()}"
+        except Exception as exc:
+            # Truly unexpected exceptions abort the batch — but name the song
+            # that broke it so the abort is actionable, not a bare traceback.
+            raise RuntimeError(
+                f"batch aborted on song {song_id}: unexpected "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
 
     workers = max(1, args.parallel or 1)
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -426,7 +436,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     build = subparsers.add_parser("build", help="run the normalization→levels stages (2–10) with --from-stage controls")
     build.add_argument("song_id")
-    build.add_argument("--from-stage", type=int, help="resume at stage N (loads stage N-1 intermediate)")
+    build.add_argument("--from-stage", type=int, help="resume EXACTLY at stage N (requires the stage N-1 intermediate)")
+    build.add_argument("--resume-nearest", action="store_true", help="with --from-stage: walk back to the nearest earlier intermediate instead of failing")
     build.add_argument("--stage", type=int, help="run only up to stage N")
     build.add_argument("--level", help="levels to emit (v0 emits level 1 only)")
     _add_metadata_arguments(build)
@@ -474,11 +485,10 @@ def main(argv: list[str] | None = None) -> int:
         "batch": _cmd_batch,
     }
 
-    if args.command == "eval":
-        _run_eval(args)
-        return 0
-
     try:
+        if args.command == "eval":
+            _run_eval(args)
+            return 0
         return handlers[args.command](args)
     except PipelineError as exc:
         print(f"pipeline: error: {exc.render()}", file=sys.stderr)

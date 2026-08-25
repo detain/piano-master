@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from pipeline.build.config import BuildConfig
+from pipeline.build.errors import HandsError
 from pipeline.build.runner import StageReport
 
 SPLIT_PITCH = 60  # MIDI C4: single-staff split point (documented v0 default)
@@ -77,7 +78,7 @@ def run_stage_hands(
     report = StageReport(stage=4, name="hands")
     notes = doc.get("notes", [])
     if not notes:
-        raise ValueError("no notes to assign hands to — stage 3 produced an empty timeline")
+        raise HandsError("no notes to assign hands to — stage 3 produced an empty timeline")
     doc["notes"] = assign_hands(notes)
 
     confidence_by_index = {

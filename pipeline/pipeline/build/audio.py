@@ -31,6 +31,7 @@ identical across runs.
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -76,22 +77,77 @@ def _require_ffmpeg() -> None:
         )
 
 
+def _linear_bpm_at(
+    entry: dict[str, Any], next_entry: dict[str, Any], beat: float
+) -> float:
+    """The interpolated bpm at ``beat`` inside a linear segment."""
+    span = next_entry["atBeat"] - entry["atBeat"]
+    if span <= 0:
+        return entry["bpm"]
+    fraction = (beat - entry["atBeat"]) / span
+    return entry["bpm"] + fraction * (next_entry["bpm"] - entry["bpm"])
+
+
+def _bpm_seconds(segment_start: float, segment_end: float, bpm_a: float, bpm_b: float) -> float:
+    """Seconds spanned by a beat segment whose tempo ramps linearly from
+    ``bpm_a`` to ``bpm_b`` (constant when they are equal)."""
+    if abs(bpm_b - bpm_a) < 1e-12:
+        return (segment_end - segment_start) * 60.0 / bpm_a
+    slope = (bpm_b - bpm_a) / (segment_end - segment_start)
+    return (60.0 / slope) * math.log(bpm_b / bpm_a)
+
+
+def _interval_seconds(start: float, end: float, entries: list[dict[str, Any]]) -> float:
+    """Seconds spanned by the beat interval [start, end] under a sorted tempo
+    map, integrating each tempo entry's segment piecewise.
+
+    A ``step`` curve holds its bpm until the next entry; a ``linear`` curve
+    ramps to the next entry's bpm across the segment (the last entry extends
+    at its own bpm). Integrating over the note's beat span is what makes a
+    note crossing a tempo change render at the correct length (review M4).
+    """
+    if end <= start:
+        return 0.0
+    total = 0.0
+    for index, entry in enumerate(entries):
+        next_beat = entries[index + 1]["atBeat"] if index + 1 < len(entries) else float("inf")
+        if end <= entry["atBeat"]:
+            break
+        segment_start = max(start, entry["atBeat"])
+        segment_end = min(end, next_beat)
+        if segment_end <= segment_start:
+            continue
+        curve = entry.get("curve", "step")
+        if curve == "linear" and math.isfinite(next_beat) and next_beat > entry["atBeat"]:
+            next_entry = entries[index + 1]
+            bpm_a = _linear_bpm_at(entry, next_entry, segment_start)
+            bpm_b = _linear_bpm_at(entry, next_entry, segment_end)
+            total += _bpm_seconds(segment_start, segment_end, bpm_a, bpm_b)
+        else:
+            total += (segment_end - segment_start) * 60.0 / entry["bpm"]
+    return total
+
+
 def beat_to_seconds(beats: list[float], tempo_map: list[dict[str, Any]]) -> list[float]:
-    """Beats → seconds under the tempoMap (step curves; v0 renders linear
-    tempo curves as step — documented)."""
+    """Beats → absolute seconds under the tempoMap, integrating step and
+    linear curves piecewise over each interval [0, beat]."""
     entries = sorted(tempo_map, key=lambda e: e["atBeat"])
-    result: list[float] = []
-    for beat in beats:
-        seconds = 0.0
-        for index, entry in enumerate(entries):
-            next_beat = entries[index + 1]["atBeat"] if index + 1 < len(entries) else float("inf")
-            if beat <= entry["atBeat"]:
-                break
-            segment_end = min(beat, next_beat)
-            if segment_end > entry["atBeat"]:
-                seconds += (segment_end - entry["atBeat"]) * 60.0 / entry["bpm"]
-        result.append(seconds)
-    return result
+    return [_interval_seconds(0.0, beat, entries) for beat in beats]
+
+
+def note_durations_seconds(
+    start_beats: list[float],
+    dur_beats: list[float],
+    tempo_map: list[dict[str, Any]],
+) -> list[float]:
+    """Each note's duration in seconds by INTEGRATING the tempo map over its
+    beat span [start, start + dur] — a note crossing a tempo change gets the
+    correct length (review M4; step and linear curves both integrate)."""
+    entries = sorted(tempo_map, key=lambda e: e["atBeat"])
+    return [
+        _interval_seconds(start, start + dur, entries)
+        for start, dur in zip(start_beats, dur_beats)
+    ]
 
 
 def _freq_for_pitch(pitch: int) -> float:
@@ -483,17 +539,16 @@ class SineRenderer(AudioRenderer):
         out_dir: Path,
         level: int,
     ) -> dict[str, Path]:
-        # The note timeline in seconds (step tempo map).
+        # The note timeline in seconds: onsets via the tempo map, durations
+        # by INTEGRATING the tempo map over each note's beat span (a note
+        # crossing a tempo change keeps its true length — review M4).
         beats = [note["startBeat"] for note in notes]
+        durations_beats = [note["durBeats"] for note in notes]
         seconds = beat_to_seconds(beats, tempo_map)
-        durations_seconds = [note["durBeats"] * 60.0 / tempo_map[0]["bpm"] for note in notes]
-        total_beats = max(beats) + max((d for d in durations_seconds), default=0.0)
-        total_seconds = total_beats * 60.0 / tempo_map[0]["bpm"] + 0.3
+        durations_seconds = note_durations_seconds(beats, durations_beats, tempo_map)
+        end_beats = [start + dur for start, dur in zip(beats, durations_beats)]
+        total_seconds = beat_to_seconds([max(end_beats)], tempo_map)[0] + 0.3
 
-        # NOTE: durations above use the FIRST tempo entry's bpm per note; with
-        # a single tempo (all v0 fixtures) this is exact. Multi-tempo songs
-        # use the default tempo for durations (documented v0 cut; the timeline
-        # mapping itself honors the tempo map).
         rh = render_sine_stem(notes, seconds, durations_seconds, total_seconds, hand="R")
         lh = render_sine_stem(notes, seconds, durations_seconds, total_seconds, hand="L")
         full = rh + lh
