@@ -4,10 +4,11 @@ Pick-up point for a fresh build-orchestrator session. Read this, plan_piano.md �
 prompt_piano.md, and the SDD ledger (.superpowers/sdd/plan_piano/progress.md) before
 dispatching any work.
 
-## Current state (2026-08-25, HEAD 106ad8b)
+## Current state (2026-08-25, HEAD d7e4702)
 Phase 0 is functionally complete — all six Phase-0 NEXT-WORK items shipped, CI green on
-every commit. The remaining Phase-0 gates are EXTERNAL (hardware / legal / time). The next
-work is Phase 1's hardware-free tracks.
+every commit. The remaining Phase-0 gates are EXTERNAL (hardware / legal / time). Phase 1's
+hardware-free tracks are landing: P1.1 SongPack v1 frozen, P1.2 pipeline CLI v0 shipped,
+P1.5 scoring engine shipped. Next: P1.6 lesson player.
 
 By workspace:
 - engine/: pitch harness 88/88 (A0–C8), yin_cli, WavReader, NoteEventQueue, OboeInput
@@ -21,14 +22,16 @@ By workspace:
 - content/ + docs/: P0.8 rights groundwork (checklist + 15 candidates), P0.9 gate draft.
 - content/ + docs/ + pipeline/ + api/ + android/: P1.1 SongPack v1 frozen — docs/specs/songpack-v1.md + canonical schema content/schema/songpack-v1.json + validators in all three consumers (Python/PHP/Kotlin, no drift by construction) + 5 golden fixtures covering the awkward cases + CI drift guard. pytest 30/30, phpunit 31/171, gradle 34 JVM tests, CI green.
 - pipeline/: P1.2 CLI v0 complete — stage framework (ingest→validate→normalize→hands→chunk→layout→levels→audio→pack→publish), deterministic byte-identical packs (9/9 double-build), 12-file bad-input corpus, full §8.2 CLI. pytest 112. Fluidsynth backend code-complete but needs provisioning (no sudo).
+- android/: P1.5 scoring engine complete — pure-Kotlin `:scoring` module (package com.keyquest.scoring, kotlin-jvm 2.2.0, JVM 17, ZERO deps, stdlib only), tempo-scaled matching windows + 90 ms chord clustering (partial credit), PERFECT/GOOD/MISSED/WRONG verdicts, score = min(100, Σw(1+bonus)/Σw) + stars 60/80/95 (remote-config tunable), per-measure error heatmap, TempoMap port + MeasureMapper, TSV replay tool (JavaExec `replay`, not in check), property suite 200 seeds × 8 scenarios. 118 tests / 0 failures (8 classes); LINE coverage 99.42% (2749/2765); jacoco ≥0.95 gate in `:scoring:check`. Spec: docs/specs/scoring-v1.md. Commit d7e4702.
 
 ## Next work — Phase 1 hardware-free tracks (in order)
-1. P1.5 Scoring engine — plan §6 + §20 P1.5. Deliverables: pure-Kotlin module (zero
-   Android deps), matching windows (tempo-scaled, beginner widening), chord clustering
-   (90ms cluster, partial credit), verdicts + score/stars math (remote-config thresholds),
-   per-measure error telemetry, property tests (monotone score, never NaN/>100,
-   deterministic, generated event streams), replay tool. Verify: ≥95% line coverage,
-   property suite green.
+1. P1.6 Lesson player — plan §20 P1.6 (the signature screen, §7). Deliverables: layout +
+   transport bar (P1.6.1), note-bar + staff skins (P1.6.2/P1.6.3), skin toggle mid-lesson
+   (P1.6.4), real-time feedback (P1.6.5), combo counter + juice with reduced-motion setting
+   (P1.6.6), on-screen keyboard zone (P1.6.7), touch input path → `NoteEvent(source=TOUCH)`
+   → the same scorer (P1.6.8), end-of-chunk results screen (P1.6.9). Verify: JVM-testable
+   parts + screenshot tests vs golden SongPacks for both skins; ≥58 fps on the low-end
+   device and feedback within one frame of the scoring verdict measured when devices arrive.
 
 ## Hardware-gated work (when the 5 phones / DGX-520 / MIDI keyboards arrive)
 - P0.4 MIDI (USB host + BLE): MidiManager enumeration, running status, NoteOn-vel-0-as-off,
@@ -72,6 +75,9 @@ By workspace:
 - make bootstrap uses `python3` (3.13) for the pipeline venv; the correct .venv is 3.12.12
   (from conda ai env). Don't let bootstrap rebuild it with 3.13.
 - OAF TFLite + Basic Pitch + MAESTRO audio blockers (see pipeline/README.md bake-off section).
+- Scoring calibration open questions (docs/specs/scoring-v1.md): perfectBand / matching-window
+  values to be tuned against P0.2.4 device latency data when it lands; the :scoring `replay`
+  tool exists so scoring changes can be argued with recorded sessions.
 
 ## Environment (server 2026-08-22)
 Ubuntu 24.04.4, 64-core/251GB, 3.3TB disk. PHP 8.3.6+Composer 2.10.1, Node 24/npm 11,

@@ -2659,7 +2659,23 @@ real reason the educator is the first hire, not the last.
 ## 24. Build Status Log
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
-> **LATEST (2026-08-24):** P1.2 pipeline CLI v0 shipped and APPROVED (ingest→validate→normalize→hands→chunk→layout→levels→audio→pack→publish, deterministic byte-identical builds, bad-input corpus) — see the entry below. Next work: P1.5 scoring engine.
+> **LATEST (2026-08-25):** P1.5 scoring engine shipped and APPROVED (pure-Kotlin `:scoring` module, zero Android deps, tempo-scaled matching windows + 90 ms chord clustering, property suite 200 seeds × 8 scenarios, ≥95% line-coverage gate, TSV replay tool) — see the entry below. Next work: P1.6 lesson player.
+
+### 2026-08-25 — P1.5 Scoring engine (pure-Kotlin :scoring module, zero deps, property suite, replay tool)
+**Commits:** `d7e4702` (main; range 027b289..d7e4702). On master, pushed, remote CI green (5 jobs).
+**What shipped:**
+- New Gradle module `android/scoring/` — pure Kotlin, ZERO dependencies (stdlib only), package `com.keyquest.scoring`, kotlin-jvm 2.2.0, JVM target 17, JUnit 4; jacoco 0.8.12 LINE COVEREDRATIO ≥0.95 gate wired into `:scoring:check`. Spec: `docs/specs/scoring-v1.md` (window formula, verdicts, cluster rule, score/stars, telemetry, replay TSV format, determinism, open calibration questions).
+- Matching (P1.5.1): tempo-scaled windows [t−120 ms, t+180 ms] at refBpm 120, scale = (refBpm/bpm).coerceIn(0.5, 2.0), beginner ±250 ms; PERFECT band 50 ms + 10% timing-bonus weight; verdicts PERFECT/GOOD/MISSED/WRONG — wrong-pitch-in-window = WRONG, never consumed; unconsumed events = extras.
+- Chord clustering (P1.5.2): 90 ms (absolute ms, seconds-converted) → FULL/PARTIAL/MISSED outcomes with partial credit.
+- Score math (P1.5.3): score = min(100, 100·Σw(1+bonus)/Σw), never NaN/>100; stars 60/80/95 as a `StarThresholds` parameter (remote-config tunable).
+- Telemetry (P1.5.4): per-measure error heatmap derived from timeSignatures + pickupBeats (notes carry no measure field in SongPack).
+- Property tests (P1.5.5): java.util.Random fixed seed, 200 seeds × 8 scenarios (base/early/late/extra/missing/wrongOctave/rolled/duplicates); invariants — no NaN, 0..100, deep-equal determinism, stars consistent, heatmap sums, unique matched indexes, verdict counts sum, extra-event-never-increases, TempoMap monotonicity; monotone-in-accuracy with documented ambiguity corner (overlapping same-pitch windows, bounded by bonus). Mutation-2 (fix wrong pitch) retargeted to UNCONSUMED wrong-pitch events after review — proven to execute (201 executions over 200 seeds).
+- Replay tool (P1.5.6): SessionFormat + pure ReplayRunner + thin ReplayMain (injectable seam) + Gradle JavaExec `replay` task (not in `check`) — scoring changes can be argued with recorded sessions.
+- Supporting math: TempoMap = faithful Kotlin port of pipeline audio.py beat_to_seconds (step/linear, log-integral, 1e-12 threshold); MeasureMapper mirrors songpack-v1 §2 pickup semantics (1-beat pickup + 8×4/4 → 33 beats; divergence from pipeline `_linearize` documented in MeasureMapper KDoc).
+- CI: android-unit job now runs `./gradlew testDebugUnitTest :scoring:check`; lint-all gains a purity grep forbidding `^import (android|androidx)\.` in android/scoring/src (verified to fail on a planted android.util.Log import).
+**Verified:** 118 tests / 0 failures (8 classes); LINE coverage 99.42% (2749/2765), INSTRUCTION 96.32%, BRANCH 92.76%; `:scoring:check` + `:scoring:jacocoTestCoverageVerification` green; `:app` testDebugUnitTest unaffected; make lint OK.
+**Review:** APPROVED after 2 review passes + fix rounds. Round 1: APPROVE w/ 6 minors (M1 property-test guard hole, M2 empty-expected extras, M3 missing-scenario tail-drop, M4 dead else, M5 --stars fail-fast, M6 KDoc) — all fixed. Re-review: APPROVE w/ 1 residual (mutation-2 vacuous) — fixed + proven (201 executions). No blockers/majors at any point.
+**Next:** P1.6 lesson player (plan §20 P1.6 — layout/transport, note-bar + staff skins, skin toggle, real-time feedback, combo/juice, on-screen keyboard, touch input path through the same scorer, results screen; screenshot tests vs golden SongPacks; ≥58 fps expectation measured when devices arrive).
 
 ### 2026-08-24 — P1.2 Pipeline CLI v0 (stage framework, deterministic builds, bad-input corpus)
 **Commits:** `49265f0` (main) + `d1fa785` (CI: ffmpeg) → review fixes `8583208` (M1 per-note chord ties) → `0e60f14` (M2 nested repeats+voltas) → `d61a0da` (M3 MIDI delta) → `fdc40db` (minors m4–m11) → `0c0c312` (CI: pyyaml) → `106ad8b` (brute-force lock). All on master, pushed, remote CI green (5 jobs).
