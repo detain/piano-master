@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "keyquest-android"
 include(":app")
+include(":scoring")

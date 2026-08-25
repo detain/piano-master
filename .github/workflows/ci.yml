@@ -149,13 +149,15 @@ jobs:
       # Caches the Gradle user home (dependencies + build cache).
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Run unit tests (debug)
+      - name: Run unit tests (debug) + scoring gate
         run: |
           set -euxo pipefail
           cd android
           # Wrapper is committed (gradlew + gradle/wrapper/gradle-wrapper.jar)
           # and pins Gradle 8.11.1.
-          ./gradlew testDebugUnitTest --no-daemon --stacktrace
+          # :scoring:check runs the P1.5 scorer's tests + the >= 95% line
+          # coverage verification (plan §20 P1.5 expectation).
+          ./gradlew testDebugUnitTest :scoring:check --no-daemon --stacktrace
         # --stacktrace emits nothing on a green run and gives a usable trace on
         # a red one — always passing it avoids paying for a second run.
 
@@ -308,6 +310,17 @@ jobs:
           # use $request->get()/post()/header()/session() (§13.4.2).
           if grep -rnE '\$_(GET|POST|SERVER|SESSION|REQUEST|COOKIE|FILES|ENV)' api/app api/config; then
             echo "::error::superglobal read found in api/app or api/config — use the \$request object (§13.4.2)." >&2
+            exit 1
+          fi
+
+      - name: Forbid Android imports in the scoring module
+        run: |
+          set -euxo pipefail
+          # :scoring is the pure-Kotlin scoring engine (plan §20 P1.5): zero
+          # Android dependencies is a hard gate. A stray import would silently
+          # let android.*/androidx.* classes creep into the purity bar.
+          if grep -rnE '^import (android|androidx)\.' android/scoring/src; then
+            echo "::error::android.*/androidx.* import found in android/scoring — the scorer is pure Kotlin by design (plan §20 P1.5)." >&2
             exit 1
           fi
 
