@@ -2659,7 +2659,20 @@ real reason the educator is the first hire, not the last.
 ## 24. Build Status Log
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
-> **LATEST (2026-08-24):** P1.1 SongPack v1 frozen (spec + canonical schema + 3-consumer validators + golden fixtures + CI drift guard) — see the entry below. Next work: P1.2 pipeline CLI v0, then P1.5 scoring engine.
+> **LATEST (2026-08-24):** P1.2 pipeline CLI v0 shipped and APPROVED (ingest→validate→normalize→hands→chunk→layout→levels→audio→pack→publish, deterministic byte-identical builds, bad-input corpus) — see the entry below. Next work: P1.5 scoring engine.
+
+### 2026-08-24 — P1.2 Pipeline CLI v0 (stage framework, deterministic builds, bad-input corpus)
+**Commits:** `49265f0` (main) + `d1fa785` (CI: ffmpeg) → review fixes `8583208` (M1 per-note chord ties) → `0e60f14` (M2 nested repeats+voltas) → `d61a0da` (M3 MIDI delta) → `fdc40db` (minors m4–m11) → `0c0c312` (CI: pyyaml) → `106ad8b` (brute-force lock). All on master, pushed, remote CI green (5 jobs).
+**What shipped:**
+- Stage framework `pipeline/pipeline/build/` — pure `(artifact, config) -> (artifact, report)` stages: ingest (provenance required), validate (music21; every unsupported construct named-rejected), normalize (explicit repeat-expansion state machine — simple repeats + voltas + nested, D.S./D.C. rejected by name; grace→scoringWeight 0; ornaments expanded; ties→tieToIndex; idempotent), hands, chunking suggestions (never split a tie, no mid-beat start, loopSafe), difficulty (v0 = 1; calibrated scoring deferred), layout precompute, levels (single level), audio, pack, publish.
+- Full §8.2 CLI surface (`ingest build audio validate diff publish batch` + `eval` preserved) with one-line stderr errors and NO stack traces; `--from-stage` exact-or-error + `--resume-nearest`; `--strict` wired; batch per-item isolation.
+- Determinism: sorted JSON keys, fixed float formatting, zeroed zip stamps, Ogg serial canonicalization, `buildTimestamp` = `SOURCE_DATE_EPOCH` else fixed sentinel, `buildInfo` excluded from the content hash. **9/9 golden packs byte-identical** across independent builds (audio included) — CI double-build job added.
+- Audio: deterministic sine renderer default (two-pass loudnorm −16 LUFS/−1 dBTP, Opus 48 kHz, mic-safe spectral check <−40 dB in 80 Hz–2 kHz measured on the encoded file, alignment ≤ 10 ms, tempo-map-integrated durations incl. linear curves); fluidsynth backend code-complete behind the same interface (subprocess + sha256-pinned soundfont) — needs provisioning (no sudo on server; CI does not depend on it).
+- Bad-input corpus: 12 defect files (`pipeline/tests/bad/`), each → named actionable error; 9 awkward-case MusicXML fixtures; 112 pytest tests.
+- v0 scope cuts documented in `docs/specs/pipeline-v0.md` (calibrated difficulty, L2/L3 generation, fingering, D.S./D.C., DGX, CDN publish).
+**Verified:** pytest 112/112, make lint OK, determinism double-build 9/9 byte-identical, remote CI green on all commits.
+**Review:** APPROVED after 1 pass + fix series (M1 per-note chord tie extraction; M2 volta ownership in nested repeats; M3 absolute-tick MIDI events; minors: tempo-integrated durations, strict wiring, atomic pack write, exact from-stage, eval boundary, shared chord beams, batch isolation; CI pyyaml; brute-force termination test).
+**Next:** P1.5 scoring engine (pure Kotlin, zero Android deps, property tests, ≥95% coverage) — plan §6 + §20 P1.5.
 
 ### 2026-08-24 — P1.1 SongPack v1 frozen (spec + canonical schema + 3-consumer validators + golden fixtures + CI drift guard)
 **Commits:** `9d1ebd5` (P1.1 main) → `7a82caf` (classloader-warning fix) → `cac560b` (review fixes: date-time enforcement, drift-guard exclusions, forward-compat tests) → `d74194d` (RFC3339 gate tightening). All on master, pushed, remote CI green on every commit (5 jobs).

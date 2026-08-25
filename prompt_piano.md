@@ -8,7 +8,7 @@ discipline). The SDD ledger lives at .superpowers/sdd/plan_piano/progress.md (gi
 — check it before dispatching any task you suspect may have been started. Todo list lives
 in your session tooling.
 
-STATE (as of 2026-08-24, HEAD d74194d, CI green, all pushed):
+STATE (as of 2026-08-25, HEAD 106ad8b, CI green, all pushed):
 - P0.1 complete: 7-workspace monorepo, toolchain pins, 5-job CI, ADR-0001.
 - P0.2 code complete: YIN pitch harness 88/88 (A0–C8; lowFreq 4096 for MIDI 21–42; C8
   edge; floor-pin), OboeInput (exclusive LowLatency, ring-push-only callback, granted-
@@ -31,6 +31,7 @@ STATE (as of 2026-08-24, HEAD d74194d, CI green, all pushed):
   15 candidates (content/rights/candidates-2026-08.md), 14/15 GLOBALLY PD. Legal sign-off
   P0.8.4 remains human.
 - P1.1 complete: SongPack v1 frozen — docs/specs/songpack-v1.md + canonical schema content/schema/songpack-v1.json + validators in all three consumers (Python pipeline / PHP API / Kotlin tests; one schema, no drift by construction; CI drift guard) + 5 golden fixtures (pickup, key change, triplets+6/8, ties across chunks, repeat) + versioning policy. pytest 30/30, phpunit 31/171, gradle 34 JVM tests, CI green.
+- P1.2 complete: pipeline CLI v0 — stage framework (ingest→validate→normalize→hands→chunk→layout→levels→audio→pack→publish), deterministic byte-identical builds (9/9 packs, CI double-build job), 12-file bad-input corpus with named errors, full §8.2 CLI, 112 pytest tests, CI green. Fluidsynth backend code-complete (needs provisioning).
 
 ENVIRONMENT (server 2026-08-22): Ubuntu 24.04.4, 64-core/251GB. PHP 8.3.6+Composer
 2.10.1, Node 24/npm 11, Java 21, cmake 3.28.3 (/usr/bin — broken pip shims removed), g++
@@ -57,14 +58,7 @@ CONVENTIONS (violating these gets CI red):
 
 NEXT WORK (in order — resume the plan, do not pause between tasks):
 PHASE-1 HARDWARE-FREE TRACKS (start here; all verifiable on this server):
-1. P1.2 Pipeline CLI v0 (Python): MusicXML ingest + validation (music21), normalization
-   (voices→hands, tie/slur resolution, grace notes, ornaments), auto-chunking suggestions
-   (phrase boundaries; never split a tie; loopSafe), layout precompute (beam groups,
-   spacing hints, note-bar lanes), audio stems (fluidsynth default; DGX later; EBU R128
-   −16 LUFS; Opus; mic-safe variant), pack + checksum + manifest. Verify: byte-identical
-   builds (determinism), malformed MusicXML → actionable error (no stack trace), all
-   golden fixtures build, determinism CI job.
-2. P1.5 Scoring engine (pure Kotlin, zero Android deps): matching windows (tempo-scaled,
+1. P1.5 Scoring engine (pure Kotlin, zero Android deps): matching windows (tempo-scaled,
    beginner widening), chord clustering (90ms, partial credit), verdicts
    (PERFECT/GOOD/MISSED/WRONG), score + stars math (remote-config thresholds), per-measure
    error telemetry, property tests (monotone score, never NaN/>100, deterministic, generated
@@ -78,5 +72,5 @@ overnight idle reconnect test.
 Finally: P0.9 gate re-issue (docs/phase-gates/P0.9-gate-review.md) with measured numbers.
 
 Begin by reading the ledger + plan §24 + docs/continuation.md, set up todos, and dispatch
-P1.2 first. Keep driving without pausing between tasks; stop only for irreversible/security
+P1.5 first. Keep driving without pausing between tasks; stop only for irreversible/security
 issues. Update docs/continuation.md + prompt_piano.md + ledger + plan §24 as you land work.
