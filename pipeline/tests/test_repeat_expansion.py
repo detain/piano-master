@@ -7,10 +7,18 @@ D.S./D.C./Coda are rejected in stage 2, never reaching this machine.
 
 from __future__ import annotations
 
+import itertools
+from collections.abc import Iterator
+
 import pytest
 
 from pipeline.build.errors import NormalizeError
-from pipeline.build.repeats import MeasureFlag, build_repeat_map, linearize_measures
+from pipeline.build.repeats import (
+    MAX_OUTPUT_MEASURES,
+    MeasureFlag,
+    build_repeat_map,
+    linearize_measures,
+)
 
 
 def flags_from(spec: list[tuple[int, str | None, int | None]]) -> list[MeasureFlag]:
@@ -34,6 +42,33 @@ def voltas(flags: list[MeasureFlag], number: int, measures: list[int]) -> list[M
         if flag.measure in measures:
             flag.voltas.append(number)
     return flags
+
+
+def nested_volta_flags(measure_count: int, level: int) -> Iterator[list[MeasureFlag]]:
+    """Yield every well-formed ``level``-deep nested+volta structure.
+
+    ``level`` forward repeats followed by ``level`` backward repeats (strictly
+    nested: all starts before all ends), every measure optionally carrying
+    ending 1 or 2, with at least one ending on a backward repeat — the
+    reviewer's brute-force working-set shape for the owning-section fix
+    (0e60f14). Counts: 1080 structures for (5, 2), 14742 for (7, 3).
+    """
+    for starts in itertools.combinations(range(measure_count), level):
+        for ends in itertools.combinations(range(measure_count), level):
+            if max(starts) >= min(ends):
+                continue  # a backward repeat before a forward repeat is not nested
+            for endings in itertools.product((None, 1, 2), repeat=measure_count):
+                if not any(endings[end] is not None for end in ends):
+                    continue  # no ending on any backward repeat — not a volta structure
+                yield [
+                    MeasureFlag(
+                        measure=index,
+                        starts_repeat=index in starts,
+                        end_repeat_times=2 if index in ends else None,
+                        voltas=[endings[index]] if endings[index] is not None else [],
+                    )
+                    for index in range(measure_count)
+                ]
 
 
 def test_simple_repeat_without_forward_jumps_to_piece_start() -> None:
@@ -139,6 +174,25 @@ def test_nested_voltas_previously_capping_now_terminates() -> None:
     order, passes = linearize_measures(flags)
     assert order == [0, 1, 2, 3, 2, 3, 4, 0, 1, 2, 3, 2, 3, 4]
     assert passes == [1, 1, 1, 1, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2]
+
+
+@pytest.mark.parametrize(
+    ("measure_count", "level"),
+    [(5, 2), (7, 3)],
+    ids=["2-level", "3-level"],
+)
+def test_nested_volta_structures_never_hit_cap(measure_count: int, level: int) -> None:
+    # Brute-force lock for the owning-section fix: no well-formed nested+volta
+    # structure may trip the 2000-measure output cap (the stale-bracket bug
+    # looped forever on some of them), and every expansion stays non-empty.
+    for flags in nested_volta_flags(measure_count, level):
+        try:
+            order, _passes = linearize_measures(flags)
+        except NormalizeError as exc:
+            if "repeat expansion exceeded" in str(exc):
+                pytest.fail(f"output cap raised for {flags}: {exc}")
+            raise
+        assert 1 <= len(order) <= MAX_OUTPUT_MEASURES
 
 
 def test_volta_without_open_repeat_warns_and_succeeds() -> None:
