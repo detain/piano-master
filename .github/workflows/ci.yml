@@ -157,7 +157,10 @@ jobs:
           # and pins Gradle 8.11.1.
           # :scoring:check runs the P1.5 scorer's tests + the >= 95% line
           # coverage verification (plan §20 P1.5 expectation).
-          ./gradlew testDebugUnitTest :scoring:check --no-daemon --stacktrace
+          # :app:verifyPaparazziDebug checks the P1.6 screenshot goldens; they
+          # are recorded on Linux/JDK21, which matches this ubuntu-latest JDK 21
+          # runner (plan §20 P1.6 D4).
+          ./gradlew testDebugUnitTest :scoring:check :app:verifyPaparazziDebug --no-daemon --stacktrace
         # --stacktrace emits nothing on a green run and gives a usable trace on
         # a red one — always passing it avoids paying for a second run.
 

@@ -36,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -67,6 +68,15 @@ import kotlinx.coroutines.withContext
  * @param externalSongTimeBeats when non-null, the draw position uses this value
  *   INSTEAD of the internal accumulated songTimeBeats (the internal clock keeps
  *   running but is unused — the prototype screen passes null).
+ * @param layoutDispatcher dispatcher the pre-layout build runs on. The
+ *   production default builds off-main ([Dispatchers.Default]); screenshot
+ *   tests pass [Dispatchers.Unconfined] so the layout lands synchronously
+ *   before the first captured frame. Mirrors the existing [frameClock]
+ *   testability seam.
+ * @param fixedViewportSize when non-null, the pre-layout build uses this size
+ *   instead of the [onSizeChanged]-reported viewport. Production leaves it
+ *   null and builds from the measured size; screenshot tests pass the device
+ *   pixel size (Paparazzi does not deliver layout-phase callbacks).
  */
 @Composable
 fun ScrollingNotationPlayer(
@@ -81,6 +91,8 @@ fun ScrollingNotationPlayer(
     feedback: NoteFeedback? = null,
     reducedMotion: Boolean = false,
     externalSongTimeBeats: Double? = null,
+    layoutDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    fixedViewportSize: IntSize? = null,
 ) {
     var songTimeBeats by remember { mutableDoubleStateOf(0.0) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
@@ -126,16 +138,17 @@ fun ScrollingNotationPlayer(
     // Pre-layout, off the main thread. Rebuilds only when the keys change.
     val layoutSet by produceState(
         initialValue = null as NoteLayoutSet?,
-        score, skin, pxPerBeat, viewportSize,
+        score, skin, pxPerBeat, viewportSize, fixedViewportSize,
     ) {
-        if (viewportSize.width > 0 && viewportSize.height > 0) {
-            value = withContext(Dispatchers.Default) {
+        val viewport = fixedViewportSize ?: viewportSize
+        if (viewport.width > 0 && viewport.height > 0) {
+            value = withContext(layoutDispatcher) {
                 NoteLayoutBuilder.build(
                     score = score,
                     skin = skin,
                     pxPerBeat = pxPerBeat,
-                    viewportWidth = viewportSize.width.toFloat(),
-                    viewportHeight = viewportSize.height.toFloat(),
+                    viewportWidth = viewport.width.toFloat(),
+                    viewportHeight = viewport.height.toFloat(),
                 )
             }
         }

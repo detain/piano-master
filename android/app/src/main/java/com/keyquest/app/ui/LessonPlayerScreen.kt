@@ -347,11 +347,13 @@ private fun LessonPlayerContent(pack: SongPack, modifier: Modifier = Modifier) {
 
 /**
  * The P1.6.9 results overlay: stars, final score, per-measure error heatmap,
- * and Retry/Next. The report is the frozen batch result over the pass's
- * events (freeze theorem) and is remembered once per finished pass.
+ * and Retry/Next. Renders the FINISHED-phase results (the frozen batch result
+ * over the pass's events per the freeze theorem, remembered once per finished
+ * pass). Public so Paparazzi screenshot tests can render it with a
+ * deterministically-driven session.
  */
 @Composable
-private fun ResultsOverlay(session: LessonSession, modifier: Modifier = Modifier) {
+fun ResultsOverlay(session: LessonSession, modifier: Modifier = Modifier) {
     val report = remember(session) { session.results() }
     Box(modifier = modifier.background(SCRIM_COLOR), contentAlignment = Alignment.Center) {
         Card(modifier = Modifier.padding(24.dp)) {

@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.paparazzi)
 }
 
 // ---------------------------------------------------------------------------
@@ -138,4 +139,12 @@ dependencies {
 
     // Compose tooling: live previews + layout inspector in debug builds.
     debugImplementation(libs.androidx.ui.tooling)
+}
+
+// Compiler/stdlib consistency: Paparazzi 2.0.0-alpha05 transitively forces
+// kotlin-stdlib 2.3.0 onto the unit-test classpath — metadata newer than the
+// Kotlin 2.2.0 compiler supports reliably. Pin stdlib to the project's Kotlin
+// version everywhere in this module.
+configurations.configureEach {
+    resolutionStrategy.force("org.jetbrains.kotlin:kotlin-stdlib:2.2.0")
 }

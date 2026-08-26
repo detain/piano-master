@@ -30,6 +30,7 @@ junitExt = "1.2.1"
 espressoCore = "3.6.1"
 oboe = "1.9.3"
 orgJson = "20250517"
+paparazzi = "2.0.0-alpha05"
 # JankStats (plan §20 P0.5.3 frame instrumentation). The artifact was renamed
 # androidx.metrics:metrics-jankstats -> androidx.metrics:metrics-performance
 # (stable 1.0.0 on Google Maven, checked 2026-08-22); the API is unchanged
@@ -65,3 +66,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 # Pure-JVM Kotlin module (:scoring, plan §20 P1.5) — no Android plugin, no
 # Android deps; the lint-all purity grep enforces it.
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+paparazzi = { id = "app.cash.paparazzi", version.ref = "paparazzi" }
