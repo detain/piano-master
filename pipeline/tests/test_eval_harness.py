@@ -27,11 +27,14 @@ import pytest
 from pipeline.eval.metrics import (
     MetricConfig,
     note_confusion_counts,
+    note_precision_recall_f1,
     note_precision_recall_f1_hz,
+    note_precision_recall_f1_no_offset,
 )
 from pipeline.eval.model_wrappers import GroundTruthWrapper, PyinBaselineWrapper
 from pipeline.eval.run import evaluate_corpus, evaluate_pair
 from pipeline.eval.synth import make_clean_melody, synthesize_melody
+from pipeline.eval.validate_maestro import load_test_subset
 
 # Default tolerances the harness and CLI use.
 CONFIG = MetricConfig()
@@ -117,6 +120,61 @@ def test_pitch_tolerance_is_in_cents() -> None:
     assert tp == len(ref), f"expected all {len(ref)} notes to match, got tp={tp}"
     assert fp == 0
     assert fn == 0
+
+
+def test_fno_ignores_offsets() -> None:
+    """Fno (Bittner et al. 2022) matches on onset+pitch alone; F does not.
+
+    The estimated offsets lag the reference by 2.5-4.5 s -- far beyond the
+    0.2 * ref_duration offset window -- so only the no-offset variant can
+    score perfect F1. A second case shows mir_eval's offset window is
+    symmetric: an estimated offset *earlier* than the reference offset still
+    matches under the offset-based metric.
+    """
+    ref_notes = np.array([[0.0, 0.5, 60], [0.1, 0.6, 62], [2.0, 2.5, 64]], float)
+    est_notes = np.array([[0.0, 5.0, 60], [0.1, 5.0, 62], [2.0, 5.0, 64]], float)
+
+    assert note_precision_recall_f1_no_offset(ref_notes, est_notes, CONFIG) == (
+        1.0,
+        1.0,
+        1.0,
+    )
+    assert note_precision_recall_f1(ref_notes, est_notes, CONFIG) != (
+        1.0,
+        1.0,
+        1.0,
+    )
+
+    ref_early = np.array([[0.0, 1.0, 60.0]])
+    est_early = np.array([[0.0, 0.9, 60.0]])
+    assert note_precision_recall_f1(ref_early, est_early, CONFIG) == (
+        1.0,
+        1.0,
+        1.0,
+    )
+
+
+def test_load_test_subset_stratified(tmp_path) -> None:
+    """Stratified selection spreads the limit evenly across durations."""
+    csv_path = tmp_path / "maestro.csv"
+    csv_path.write_text(
+        "split,duration\n"
+        "test,10\n"
+        "test,20\n"
+        "test,30\n"
+        "test,40\n"
+        "test,50\n"
+        "train,999\n",
+        encoding="utf-8",
+    )
+
+    subset = load_test_subset(csv_path, 3)
+    assert {int(row["duration"]) for row in subset} == {10, 30, 50}
+
+    # A limit at or above the test-row count returns every test row.
+    assert len(load_test_subset(csv_path, 5)) == 5
+    assert len(load_test_subset(csv_path, 10)) == 5
+    assert all(row["split"] == "test" for row in load_test_subset(csv_path, 10))
 
 
 def test_mir_eval_fixture_calibration() -> None:

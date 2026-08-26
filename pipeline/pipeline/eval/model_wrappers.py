@@ -16,7 +16,7 @@ The wrappers here form the P0.3.x baseline zoo:
   out to the ``engine/tools/yin_cli`` host executable, which runs the same
   streaming detector the app will use.
 - ``BasicPitchWrapper``   -- optional Spotify Basic Pitch, for the published
-  MAESTRO calibration (F1 ~0.82). Requires ``basic-pitch`` (tensorflow); the
+  MAESTRO calibration (Fno ~0.71). Requires ``basic-pitch`` (tensorflow); the
   import is lazy so the rest of the harness stays lightweight.
 - ``OafTfliteWrapper``    -- documented skeleton for Magenta Onsets-and-Frames
   TFLite (P0.3.3 attempt): blocked on missing published model + no cp312
@@ -547,8 +547,10 @@ def _hz_to_midi(frequency: float) -> float:
 class BasicPitchWrapper:
     """Spotify Basic Pitch -- the published MAESTRO baseline for calibration.
 
-    Basic Pitch reports note-level F1 ~0.82 and onset error ~0.052 s on
-    MAESTRO. The import is lazy and raises a descriptive error when
+    Basic Pitch (Bittner et al. 2022) reports note-level Fno ~0.709 on the
+    MAESTRO v2 test split (offsets ignored — the paper's stated main
+    measure); Onsets-and-Frames reports note F1 0.8226. The import is lazy
+    and raises a descriptive error when
     ``basic-pitch`` is missing: it pins ``tensorflow<2.15.1``, which has no
     Python 3.12 wheels, so it must be run in a Python < 3.12 environment.
     """
@@ -568,7 +570,7 @@ class BasicPitchWrapper:
             ) from exc
         _, _, note_events = predict(audio_path)
         notes = np.asarray(
-            [[onset, offset, pitch] for onset, offset, pitch, _ in note_events],
+            [[n[0], n[1], n[2]] for n in note_events],
             dtype=float,
         )
         if notes.size == 0:

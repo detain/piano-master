@@ -182,6 +182,32 @@ def note_precision_recall_f1(
     return float(precision), float(recall), float(f1)
 
 
+def note_precision_recall_f1_no_offset(
+    ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
+) -> tuple[float, float, float]:
+    """F1 with the same onset/pitch criteria but offsets ignored (Fno).
+
+    Matches the published protocol of Bittner et al. 2022 (Basic Pitch):
+    "the note-level F-measure-no-offset (Fno) with the same criterion as
+    F-measure, but ignoring offsets". Implemented by passing an effectively
+    unbounded offset_ratio to mir_eval (a note's offset never excludes it).
+    """
+    _require_note_array(ref_notes, "ref_notes")
+    _require_note_array(est_notes, "est_notes")
+    ref_intervals, ref_hz = _notes_to_hz(ref_notes)
+    est_intervals, est_hz = _notes_to_hz(est_notes)
+    precision, recall, f1, _ = mir_eval.transcription.precision_recall_f1_overlap(
+        ref_intervals,
+        ref_hz,
+        est_intervals,
+        est_hz,
+        onset_tolerance=config.onset_tol,
+        offset_ratio=1e9,
+        pitch_tolerance=config.pitch_tol_semitones * 100.0,
+    )
+    return float(precision), float(recall), float(f1)
+
+
 def note_confusion_counts(
     ref_notes: np.ndarray, est_notes: np.ndarray, config: MetricConfig
 ) -> tuple[int, int, int]:
