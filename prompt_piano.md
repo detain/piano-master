@@ -8,7 +8,8 @@ discipline). The SDD ledger lives at .superpowers/sdd/plan_piano/progress.md (gi
 — check it before dispatching any task you suspect may have been started. Todo list lives
 in your session tooling.
 
-STATE (as of 2026-08-25 evening, HEAD 323383a, CI green, all pushed):
+STATE (as of 2026-08-26, HEAD 1c52e85 — P1.6 lesson player DONE, 4 commits on master,
+push + CI confirmation pending):
 - P0.1 complete: 7-workspace monorepo, toolchain pins, 5-job CI, ADR-0001.
 - P0.2 code complete: YIN pitch harness 88/88 (A0–C8; lowFreq 4096 for MIDI 21–42; C8
   edge; floor-pin), OboeInput (exclusive LowLatency, ring-push-only callback, granted-
@@ -50,16 +51,17 @@ STATE (as of 2026-08-25 evening, HEAD 323383a, CI green, all pushed):
   proven (201 executions). 118 tests / 0 failures; LINE coverage 99.42%; jacoco ≥0.95
   gate in `:scoring:check`; CI android-unit runs `:scoring:check`; lint-all purity grep.
   Spec: docs/specs/scoring-v1.md. Commit d7e4702.
-- P1.6 (IN PROGRESS — design + toolchain research complete, NO code landed; see plan §24
-  evening entry): RealtimeScorer design (incremental batch-consistent scorer, freeze rule
-  sessionSeconds > max(closeSeconds[0..k]), finalize()==batch exactly, tempo-inversion
-  regression spec, property suite spec) + lesson-player architecture (LessonSession,
-  SongPack loader via org.json, LayoutHintDeriver, ProtoScore adapter, per-frame feedback
-  state, OnScreenKeyboard multi-touch, NoteVoice seam, results overlay, transport,
-  reduced motion, pickup_anacrusis asset, app depends on :scoring) + P1.6 cuts list +
-  screenshot-toolchain decision: Paparazzi 2.0.0-alpha05 (fallback Robolectric 4.16.1 +
-  Roborazzi 1.73.0). Working tree has ONE untracked file to DELETE first:
-  android/scoring/src/main/kotlin/com/keyquest/scoring/Touchstone.kt.
+- P1.6 complete: lesson player — D1 RealtimeScorer (0b28af0): incremental driver over
+  the batch Scorer, running-max prefix freeze (never flips), finalize()==batch exactly,
+  tempo-inversion regression; 134 tests, LINE 99.52%. D2 (5226130): SongPack v1 model +
+  org.json loader, LayoutHintDeriver, ProtoScoreAdapter, LessonSession, ComboTracker. D3
+  (1ca619b): LessonPlayerScreen + OnScreenKeyboard multi-touch + NoteVoice seam
+  (SilentVoice) + renderer feedback + results overlay + pickup_anacrusis asset. D4
+  (1c52e85): Paparazzi 2.0.0-alpha05, 4 goldens, CI += :app:verifyPaparazziDebug. 218
+  tests green locally (134 scoring + 84 app incl. 4 screenshots); goldens recorded on
+  this Linux/JDK21 server. Build workarounds kept: sdk-common 31.9.1 force,
+  kotlin-stdlib 2.2.0 force, layoutDispatcher/fixedViewportSize seams,
+  InputStream.readText() removed in Kotlin 2.2.
 
 ENVIRONMENT (server 2026-08-22): Ubuntu 24.04.4, 64-core/251GB. PHP 8.3.6+Composer
 2.10.1, Node 24/npm 11, Java 21, cmake 3.28.3 (/usr/bin — broken pip shims removed), g++
@@ -91,29 +93,21 @@ CONVENTIONS (violating these gets CI red):
 - SongPack v1: beats-based timing, additive-only. App never parses MusicXML.
 
 NEXT WORK (in order — resume the plan, do not pause between tasks; small dispatches):
-PHASE-1 HARDWARE-FREE TRACKS (start here; all verifiable on this server):
-1. DELETE android/scoring/src/main/kotlin/com/keyquest/scoring/Touchstone.kt (sanity file).
-2. P1.6 Lesson player (plan §20 P1.6 + §24 evening entry — the signature screen §7):
-   D1 RealtimeScorer (:scoring; class → unit tests → property tests → :scoring:check
-   incl. jacoco ≥0.95) → review+commit; D2 SongPack model/loader + LayoutHintDeriver +
-   ProtoScore adapter + LessonSession + ComboTracker + tests → review+commit; D3
-   LessonPlayerScreen UI (transport bar P1.6.1, both skins P1.6.2/3, skin toggle P1.6.4,
-   real-time feedback P1.6.5, combo + reduced-motion P1.6.6, keyboard zone P1.6.7, touch
-   → NoteEvent(source=TOUCH) → same scorer P1.6.8, results screen P1.6.9; voice seam;
-   assets; MainActivity) → review+commit; D4 Paparazzi 2.0.0-alpha05 screenshot tests vs
-   golden SongPacks (both skins) + CI android-unit += :app:verifyPaparazziDebug (record
-   goldens on this Linux server) → review+commit. Verify: JVM tests + screenshot tests;
-   ≥58 fps on low-end device and feedback within one frame of the verdict measured when
-   devices arrive.
-Then when hardware arrives (5 phones, DGX-520, MIDI keyboards): P0.4 MIDI (USB+BLE),
-P0.7 DGX ground-truth corpus, P0.2.4 latency rig, P0.3.4 device model bench, P0.5.3 fps
-measurement; then P0.3 bake-off unblock (Python 3.11 venv for basic-pitch; OAF TFLite
-export) + P0.3.6 model ADR.
-Human/legal: P0.8.2 per-song checklist completion + P0.8.4 legal sign-off; P0.6.3 8h
-overnight idle reconnect test.
-Finally: P0.9 gate re-issue (docs/phase-gates/P0.9-gate-review.md) with measured numbers.
+1. Push to origin/master + confirm CI 5/5 green (first CI run also proves cross-machine
+   Paparazzi goldens).
+2. When hardware arrives (5 phones, DGX-520, MIDI keyboards): P0.4 MIDI (USB+BLE), P0.7
+   DGX ground-truth corpus, P0.2.4 latency rig, P0.3.4 device model bench, P0.5.3 fps
+   measurement (≥58fps avg, JankTracker logcat tag KeyQuestJank).
+3. P0.3 bake-off unblock (Python 3.11 venv for basic-pitch; OAF TFLite; MAESTRO audio)
+   + P0.3.6 model ADR.
+4. Human/legal: P0.8.2 per-song checklist completion + P0.8.4 legal sign-off; P0.6.3 8h
+   overnight idle reconnect test.
+5. P0.9 gate re-issue (docs/phase-gates/P0.9-gate-review.md) with measured numbers.
+P1.6 open items: P1.8.4 tempo control (multi-point tempo renderer mapping); P1.8 mic/MIDI
+clock alignment (NoteEvent.onTimeNs on the frame clock — TOUCH only today); loop-replay
+detection via frozenCount regression (latent zero-note chunk); in-lesson score readout cut.
 
-Begin by reading the ledger + plan §24 + docs/continuation.md, set up todos, and dispatch
-P1.6 first (delete Touchstone.kt, then D1 in small steps). Keep driving without pausing
-between tasks; stop only for irreversible/security issues. Update docs/continuation.md +
+Begin by reading the ledger + plan §24 + docs/continuation.md, set up todos, and push
+P1.6 to origin/master + confirm CI 5/5 green first. Keep driving without pausing between
+tasks; stop only for irreversible/security issues. Update docs/continuation.md +
 prompt_piano.md + ledger + plan §24 as you land work.

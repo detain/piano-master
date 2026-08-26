@@ -4,32 +4,58 @@ Pick-up point for a fresh build-orchestrator session. Read this, plan_piano.md �
 prompt_piano.md, and the SDD ledger (.superpowers/sdd/plan_piano/progress.md) before
 dispatching any work.
 
-## Current state (2026-08-25 evening, HEAD 323383a — NO commits landed this session)
-P1.6 lesson player: ARCHITECTURE + TOOLCHAIN RESEARCH COMPLETE (full detail in plan §24
-evening entry); implementation NOT started. Working tree = HEAD + ONE untracked file:
-`android/scoring/src/main/kotlin/com/keyquest/scoring/Touchstone.kt` (agent sanity file —
-DELETE it as the first action of the next session; it compiles harmlessly but must not ship).
+## Current state (2026-08-26, HEAD 1c52e85)
+P1.6 lesson player IMPLEMENTED — 4 commits on master, push to origin/master + CI
+confirmation pending (master is ahead 4): `0b28af0` (D1 RealtimeScorer), `5226130` (D2
+SongPack model/loader + LayoutHintDeriver + ProtoScoreAdapter + LessonSession +
+ComboTracker), `1ca619b` (D3 LessonPlayerScreen + OnScreenKeyboard + NoteVoice seam +
+renderer feedback), `1c52e85` (D4 Paparazzi 2.0.0-alpha05, 4 goldens, CI +=
+`:app:verifyPaparazziDebug`). 218 tests green locally: 134 scoring (LINE 99.52%) + 84 app
+incl. 4 screenshots.
 
-- Design (in plan §24): `RealtimeScorer` in :scoring — incremental batch-consistent scorer
-  (freeze rule: sessionSeconds > max(closeSeconds[0..k]); frozen verdicts never flip;
-  finalize() == batch Scorer EXACTLY; full API spec + regression tests incl. the
-  tempo-change inversion case + property suite 200 seeds × 8 scenarios).
-  LessonSession (pure Kotlin, app module, frame-driven clock) + SongPack model/loader
-  (org.json + testImplementation org.json:json) + LayoutHintDeriver (fixtures carry no
-  hints) + ProtoScore adapter (rebased beats for renderer) + renderer per-frame feedback
-  state + OnScreenKeyboard (multi-touch → NoteEvent(source=TOUCH) → RealtimeScorer) +
-  NoteVoice seam (SilentVoice stub) + results overlay (stars/score/heatmap/retry/next) +
-  transport (tempo display/pause/loop/progress/skin toggle) + reduced-motion setting.
-  App gains implementation(project(":scoring")); bundle pickup_anacrusis fixture as asset.
-- P1.6 cuts: tempo-change control (P1.8.4), Wait-for-Me (P1.7), count-in (P1.8.2),
-  soundfont voice (P1.8 provisioning), finger badges only when schema `finger` present,
-  no in-lesson score readout.
-- Screenshot tests: **Paparazzi 2.0.0-alpha05** (only line supporting AGP 8.9.1/Gradle
-  8.11.1/Kotlin 2.2.0+compose plugin/Java 21; headless ubuntu-latest; tests in normal
-  `test` source set; goldens src/test/snapshots/; recordPaparazziDebug/verifyPaparazziDebug;
-  default maxPercentDifference 0.01). Gotchas: issue #2342 HandlerThread NoSuchMethodError
-  (our static UI unaffected); record goldens on Linux/JDK21 (cross-OS AA diffs #311).
-  Fallback: Robolectric 4.16.1 + Roborazzi 1.73.0.
+## What shipped (compact; full detail in plan §24 2026-08-26 entry)
+- D1 — RealtimeScorer (0b28af0), in `:scoring`: incremental driver over the batch
+  `Scorer`; freeze rule watermark > `runningMaxClose[k]` (prefix freeze, never flips);
+  tentative verdicts = full batch given events so far; `finalize()` == batch EXACTLY;
+  delivery contract (monotone `onTimeNs`, tick after all events ≤ now; frozenScore NOT
+  monotone — documented); tempo-inversion regression test (60→240 bpm at beat 8 —
+  running-max rule, not per-note close); last-ulp boundary tests; property suite 200
+  seeds × 8 scenarios incl. frozen==batch-now gate. 134 tests, LINE 99.52%, jacoco ≥0.95
+  gate green.
+- D2 — data/session layer (5226130): SongPack v1 model (`com.keyquest.app.songpack`) +
+  org.json loader (format gate `songpack/v1`, strict required fields, spec ranges incl.
+  denominator set, strictly-increasing tempoMap) + LayoutHintDeriver (pitch-rank lanes
+  %5 per hand, per-staff ≤0.5-beat beam runs, xHint = startBeat*1000) + ProtoScoreAdapter
+  (chunk filter [startBeat,endBeat), rebased renderer beats + xHint, tieToIndex
+  pack→chunk-local remap, cross-chunk → null, tempo fallback, absolute-beat expected
+  notes) + LessonSession (READY/PLAYING/PAUSED/FINISHED; frame-clock anchored pass clock;
+  loop = reset-and-replay with re-anchor; retry rebuilds scorer; combo advances on event
+  AND clock freezes in freeze order) + ComboTracker. 72 app tests.
+- D3 — lesson player UI (1ca619b): LessonPlayerScreen (virtual frame clock — single
+  source of truth, freezes while paused; pass-relative renderer beats + keyboard target
+  window; per-frame NoteFeedback arrays zero-alloc; transport play/pause/loop/tempo/
+  progress/skin toggle/reduced motion/combo readout; results overlay stars/score/heatmap/
+  retry/next; fail-loud asset load) + OnScreenKeyboard (multi-touch `awaitEachGesture`,
+  boundary-centered black keys, ~1-beat target glow, wrong-key flash, KeyboardLayout pure
+  math) + NoteVoice seam (SilentVoice) + renderer feedback wiring (verdict colors, hit pop
+  0.25-beat decay, staff color-only) + `externalSongTimeBeats` + `pickup_anacrusis`
+  bundled as asset + MainActivity → LessonPlayerScreen. 80 app tests.
+- D4 — Paparazzi screenshots + CI (1c52e85): Paparazzi 2.0.0-alpha05, 4 goldens vs the
+  `pickup_anacrusis` fixture (both skins w/ feedback, keyboard targets, results overlay —
+  deterministic component-level; the full screen has async asset loading + frame loop).
+  CI android-unit += `:app:verifyPaparazziDebug`. 84 tests green locally (80 unit + 4
+  screenshots); goldens recorded on this Linux/JDK21 server.
+
+## Build workarounds (MUST stay documented — do not "clean up")
+- Root buildscript: force sdk-common 31.13.2 → 31.9.1 (31.13.2 REMOVED
+  `GradleVersion.parse`, breaking AGP 8.9.1 `VersionCheckPlugin`).
+- App module: force kotlin-stdlib 2.2.0 (paparazzi transitives resolve 2.3.0; compiler is
+  2.2.0).
+- Renderer testability seams: `layoutDispatcher` (Unconfined in tests) +
+  `fixedViewportSize` (Paparazzi never fires `onSizeChanged` — verified empirically;
+  `produceState` keys include `fixedViewportSize`).
+- Kotlin 2.2 REMOVED `InputStream.readText()` — use
+  `bufferedReader().use { it.readText() }`.
 
 ## Agent-dispatch lesson (CRITICAL — read before dispatching ANYTHING)
 - Write-capable agents (coder, general) return EMPTY results on long one-shot specs
@@ -40,54 +66,24 @@ DELETE it as the first action of the next session; it compiles harmlessly but mu
   resume an empty-result task via task_id once, then re-dispatch smaller. Never one-shot
   a multi-file spec. (This rule cost a full session to learn — follow it.)
 
-## Next work — P1.6 lesson player (in order; small dispatches)
-1. Delete Touchstone.kt.
-2. D1 RealtimeScorer: (a) class file android/scoring/src/main/kotlin/com/keyquest/scoring/RealtimeScorer.kt;
-   (b) unit tests RealtimeScorerTest.kt; (c) property tests RealtimeScorerPropertyTest.kt;
-   (d) `cd android && ./gradlew :scoring:check --no-daemon --stacktrace` — must pass incl.
-   jacoco ≥0.95 LINE gate. Spec: plan §24 evening entry. Review → commit.
-3. D2 SongPack model/loader (com.keyquest.app.songpack; org.json; load golden fixtures via
-   existing generated test resources build/generated/songpack) + LayoutHintDeriver +
-   ProtoScore adapter + LessonSession + ComboTracker + JVM tests. Review → commit.
-4. D3 LessonPlayerScreen UI: transport (tempo display/pause/loop/progress/skin toggle),
-   notation feedback (per-frame verdict state + hit pop, zero-alloc; reduced-motion
-   color-only), OnScreenKeyboard (Canvas multi-touch; glow lead ~1 beat; wrong-key flash;
-   expected-key pulse), ResultsOverlay, NoteVoice seam, bundle pickup_anacrusis asset,
-   MainActivity → LessonPlayerScreen. Review → commit.
-5. D4 Paparazzi 2.0.0-alpha05 screenshots vs golden fixtures (both skins + keyboard +
-   results) + CI android-unit += :app:verifyPaparazziDebug. RECORD goldens on this Linux
-   server (same JDK 21 as CI). Review → commit.
-6. Docs: ledger + plan §24 + continuation + prompt update; push to origin/master.
+## Next work (in order; small dispatches)
+1. Push to origin/master + confirm CI 5/5 green (first CI run also proves cross-machine
+   Paparazzi goldens).
+2. Hardware-gated (when the 5 phones / DGX-520 / MIDI keyboards arrive): P0.4 MIDI
+   (USB+BLE), P0.7 DGX ground-truth corpus, P0.2.4 latency rig, P0.3.4 device model
+   bench, P0.5.3 fps measurement (≥58fps avg, JankTracker logcat tag KeyQuestJank).
+3. P0.3 bake-off unblock: Python 3.11 venv (basic-pitch needs TF<2.15.1; no cp312
+   wheels), OAF TFLite, MAESTRO audio → run validate_maestro.py → P0.3.6 model ADR.
+4. Human/legal: P0.8.2 per-song checklist (15 candidates), P0.8.4 legal sign-off, P0.6.3
+   8h overnight idle soak.
+5. P0.9 gate re-issue (docs/phase-gates/P0.9-gate-review.md) with measured numbers.
 
-## Hardware-gated work (when the 5 phones / DGX-520 / MIDI keyboards arrive)
-- P0.4 MIDI (USB host + BLE): MidiManager enumeration, running status, NoteOn-vel-0-as-off,
-  source arbitration (MIDI → mic auto-disable), silent-controller → soundfont synth.
-- P0.7 DGX ground-truth capture rig: aligned (audio,MIDI) pairs, sync click, automated
-  alignment verification (≤5ms), batch playback, through-air captures on all 5 phones.
-- P0.2.4 latency rig: loopback + high-speed camera + internal instrumentation → per-device
-  budget table (<80ms mid-tier gate).
-- P0.3.4 device benchmark app: each model artifact × CPU/GPU/NNAPI per device →
-  latency/RTF/memory/thermal matrix.
-- P0.5.3 measurement: ≥58fps avg, ≤1% dropped, no frame >24ms on the low-end device
-  (JankTracker logcat tag KeyQuestJank + Perfetto); then P0.5.4 decision → ADR-0003.
-- P0.3 bake-off unblock: Python 3.11 venv (basic-pitch needs TF<2.15.1; no cp312 wheels),
-  obtain OAF TFLite (export from the TF checkpoint or a published artifact), MAESTRO audio
-  (GCS full zips or an alternative source) → run validate_maestro.py → P0.3.6 model ADR.
-
-## Human/legal work
-- P0.8.2: fill per-song checklist records (docs/pd-verification-checklist.md) for the 15
-  candidates (content/rights/candidates-2026-08.md) — classical ≈15–20 min each, folk
-  ≈25–35 min.
-- P0.8.4: legal sign-off on the royalty-free-only position + arrangement/recording stance.
-- P0.6.3: 8h overnight idle → hit again (MySQL reconnect; use the soak driver's
-  --reconnect-check or a manual burst).
+P1.6 open items: P1.8.4 tempo control (multi-point tempo renderer mapping); P1.8 mic/MIDI
+clock alignment (`NoteEvent.onTimeNs` must be on the frame clock — TOUCH only today);
+loop-replay detection via frozenCount regression (latent zero-note chunk); in-lesson
+score readout cut.
 
 ## Open items / known gaps
-- P1.6 design open questions (decide during implementation, document in §24):
-  (a) combo counts per-note in freeze order (a 3-tone chord adds +3) — revisit with
-  dogfooding; (b) hit feedback colors at window close (≤180ms late at ref tempo) — meets
-  "within one frame of the verdict"; (c) loop = reset-and-replay pass (events cleared);
-  (d) session clock = frame clock for ALL sources (mic/MIDI clock alignment is P1.8).
 - P1.1 SongPack v1 is frozen — format must not change without an ADR + golden-fixture
   migration (plan §20 P1.1 expectation).
 - Pipeline v0 scope cuts (docs/specs/pipeline-v0.md): calibrated difficulty, L2/L3
@@ -112,6 +108,8 @@ DELETE it as the first action of the next session; it compiles harmlessly but mu
 - Scoring calibration open questions (docs/specs/scoring-v1.md): perfectBand / matching-window
   values to be tuned against P0.2.4 device latency data when it lands; the :scoring `replay`
   tool exists so scoring changes can be argued with recorded sessions.
+- P0.6.3 8h overnight idle reconnect test still pending.
+- ADR-0003 (notation renderer decision) pending device fps/latency numbers (P0.5.3).
 
 ## Environment (server 2026-08-22)
 Ubuntu 24.04.4, 64-core/251GB, 3.3TB disk. PHP 8.3.6+Composer 2.10.1, Node 24/npm 11,
