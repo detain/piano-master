@@ -35,13 +35,17 @@ OAF env: conda `py311-oaf` (magenta 2.1.4 `--no-deps` + note-seq + TF 2.15.0); c
 `/home/sites/maestro/oaf/checkpoint/maestro_checkpoint.zip`.
 
 ## Remaining software work (in order; small dispatches)
-1. **Push to origin/master (ce17e68 + c26a6f5) + confirm CI 5/5 green.**
-2. **OAF TFLite export attempt (result UNKNOWN):** checkpoint downloaded, magenta installed,
-   TF checkpoint restore in progress. Document BOTH outcomes: success → wire `OafTfliteWrapper`
-   + third bake-off model; failure → final BLOCKED with evidence (keep OafTfliteWrapper skeleton).
-3. **8h idle soak fires ~19:57Z 2026-08-26:** verify `SOAK_8H_IDLE_TEST_PASS`, then write
-   `docs/runbooks/soak-results-2026-08-26.md` mirroring soak-results-2026-08-22.md.
-4. **P0.3.6 model ADR** once bake-off numbers are complete (Basic Pitch running; OAF pending).
+1. **OAF TFLite export: CONCLUSIVELY BLOCKED (2026-08-26).** Root cause: the 2019
+   `maestro_checkpoint.zip` was GPU-trained with CudnnRNN opaque-kernel ops (no CPU kernels in
+   any TF build — verified TF 1.15 + 2.15 CPU) and this server has no NVIDIA GPU, so the
+   checkpoint cannot be restored/converted here. Unlock paths: NVIDIA GPU + TF 1.15 metagraph
+   conversion (`/tmp/opencode/oaf_tf115_scrub.py`) or CudnnRNN→standard-LSTM surgery. Full
+   evidence: pipeline/README.md "Model bake-off status". `OafTfliteWrapper` stays a skeleton.
+2. **8h idle soak result pending (~19:57Z 2026-08-26):** verify `SOAK_8H_IDLE_TEST_PASS`, then
+   write `docs/runbooks/soak-results-2026-08-26.md` mirroring soak-results-2026-08-22.md.
+3. **P0.3.6 model ADR** next after soak — bake-off numbers now complete (Basic Pitch Fno 0.639
+   GREEN; OAF blocked above).
+4. **Commit + push** (pending ce17e68 + c26a6f5 + soak runbook + ADR) and confirm CI 5/5 green.
 5. **Hardware-gated (5 phones / DGX-520 / MIDI keyboards):** P0.4 MIDI, P0.7 DGX corpus,
    P0.2.4 latency rig, P0.3.4 device bench, P0.5.3 fps (≥58fps, tag KeyQuestJank).
 6. **Human/legal:** P0.8.4 sign-off on the P0.8.2 records; P0.9 gate re-issue with measured numbers.
@@ -78,8 +82,10 @@ one-shot a multi-file spec.
 ## Environment (server 2026-08-26)
 Ubuntu 24.04.4, 64-core/251GB. PHP 8.3.6+Composer 2.10.1, Node 24, Java 21, cmake 3.28.3,
 g++ 13/ninja, ffmpeg 6.1.1, k6 v2.2.0. Python 3.13 base; pipeline .venv = 3.12.12 (conda `ai`);
-conda `py311` (basic-pitch) + `py311-oaf` (magenta). Android SDK /home/my/android-sdk (NDK
-27.3.13750724). gh authed (detain). Remote git@github.com:detain/piano-master.
+conda envs: `py311` (basic-pitch eval), `py311-oaf` (magenta 2.1.4 experiments), `py311-oaf2`
+(magenta 1.1.2 experiments), `tf115` (TF 1.15 CPU) — `setuptools<81` / `protobuf==3.20.3`
+pinned as needed in each. Android SDK /home/my/android-sdk (NDK 27.3.13750724). gh authed
+(detain). Remote git@github.com:detain/piano-master.
 MAESTRO data: /home/sites/maestro/ (108 GB zip + oaf/checkpoint).
 
 ## Discipline (non-negotiable)

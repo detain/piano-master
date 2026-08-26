@@ -2661,7 +2661,7 @@ real reason the educator is the first hire, not the last.
 ## 24. Build Status Log
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
-> **LATEST (2026-08-26, afternoon):** P0.3.3 bake-off VALIDATED — validate_maestro unblocked + GREEN (Basic Pitch Fno 0.639 vs published 0.709, ±0.15 gate, exit 0; commit `ce17e68`); P0.8.2 clearance records DONE (18 files, `c26a6f5`). Both on master, push pending. See the entry below.
+> **LATEST (2026-08-26, evening):** P0.3.3 bake-off VALIDATED — validate_maestro unblocked + GREEN (Basic Pitch Fno 0.639 vs published 0.709, ±0.15 gate, exit 0; commit `ce17e68`); P0.8.2 clearance records DONE (18 files, `c26a6f5`). Both on master, push pending. Evening: OAF TFLite export attempt CONCLUSIVELY BLOCKED (CudnnRNN GPU-only kernels; no GPU on server; tfhub URL dead; magenta 2.1.4 arch mismatch) — documented in pipeline/README.md; 8h idle soak fires ~19:57Z (p0.6.3, task-il7qggk). See the entry below.
 
 ### 2026-08-26 (afternoon) — P0.3.3 bake-off: validate_maestro UNBLOCKED + GREEN; P0.8.2 clearance records DONE
 

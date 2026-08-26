@@ -171,18 +171,26 @@ Attempt outcomes:
   informational. `BasicPitchWrapper`'s lazy import stays safe to leave
   installed, and now unpacks basic-pitch 0.4.0's 5-field note tuples
   (previously assumed 4 — wrong onset/offset/pitch extraction).
-- **Magenta Onsets-and-Frames TFLite: BLOCKED — still no published TFLite
-  artifact; checkpoint-export attempt in progress.** Magenta GitHub releases
-  ship no binary assets (verified across all releases via the GitHub API);
-  the magentadata GCS bucket 404s every plausible `onsets_frames_big_tflite`
-  URL; Kaggle hosts no OAF model; the tfhub.dev SavedModel URL is dead. The
-  only surviving artifact is the GCS checkpoint
-  (`maestro_checkpoint.zip`), downloaded to `/home/sites/maestro/oaf/`.
-  Exporting it to TFLite requires the training graph: magenta 2.1.4 is
-  installed `--no-deps` into the conda `py311-oaf` env (with note-seq +
-  tensorflow 2.15.0) and the TF checkpoint restore is in progress — result
-  unknown, both outcomes will be documented. `OafTfliteWrapper` stays a
-  documented skeleton until a working export lands.
+- **Magenta Onsets-and-Frames TFLite: CONCLUSIVELY BLOCKED (2026-08-26).**
+  No published TFLite artifact exists (GitHub releases ship no binary assets;
+  magentadata GCS 404s every plausible `onsets_frames_big_tflite` URL; Kaggle
+  hosts none). The only surviving artifact — the GCS checkpoint
+  (`maestro_checkpoint.zip`, 2019) at `/home/sites/maestro/oaf/` — cannot be
+  restored or converted here: it was GPU-trained with CudnnRNN opaque-kernel
+  ops (verified: `onsets/cudnn_lstm/opaque_kernel`,
+  `CudnnRNNCanonicalToParams`), which have **no CPU kernels in any TF build**
+  (verified on TF 1.15 CPU and TF 2.15 CPU — "No OpKernel was registered"),
+  and this server has no NVIDIA GPU. Documented attempts (2026-08-26):
+  magenta 2.1.4 estimator export fails on architecture mismatch (fc_end 1920
+  vs checkpoint 5472; conv0/BN placement); the tfhub.dev SavedModel URL is
+  dead (404); metagraph import + scrub of the CudnnRNN saveable collections
+  restores all 162 vars but fails at the kernel check; the exact training-era
+  code is absent from pip (magenta 1.1.2/2.1.4 are both post-rename estimator
+  rewrites). Unlock paths: (a) run the metagraph conversion on a machine with
+  an NVIDIA GPU + TF 1.15 — the scrub script `/tmp/opencode/oaf_tf115_scrub.py`
+  restores cleanly once GPU kernels exist; (b) CudnnRNN→standard-LSTM graph
+  surgery. `OafTfliteWrapper` stays a documented skeleton. Note: the
+  tflite-runtime cp312 wheel blocker is now MOOT (conda `py311` env exists).
 
 Real-scoring against MAESTRO is unblocked on data: although the magentadata
 GCS bucket stores no individually downloadable wavs (verified via the GCS
