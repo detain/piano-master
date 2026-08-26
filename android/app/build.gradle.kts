@@ -115,6 +115,15 @@ dependencies {
     // for the scrolling-notation prototype.
     implementation(libs.androidx.metrics.performance)
 
+    // SongPack v1 parsing (P1.6 lesson player) — org.json, pure JVM. Main code
+    // compiles against the Android framework's org.json (present since API 1,
+    // minSdk 26); the Maven artifact is only needed on the JVM test classpath
+    // (plan §24: "testImplementation org.json:json for JVM").
+    testImplementation(libs.org.json)
+
+    // RealtimeScorer + batch scoring engine (P1.5/1.6).
+    implementation(project(":scoring"))
+
     // Unit tests (JVM).
     testImplementation(libs.junit)
 

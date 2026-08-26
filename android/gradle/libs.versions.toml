@@ -29,6 +29,7 @@ junit = "4.13.2"
 junitExt = "1.2.1"
 espressoCore = "3.6.1"
 oboe = "1.9.3"
+orgJson = "20250517"
 # JankStats (plan §20 P0.5.3 frame instrumentation). The artifact was renamed
 # androidx.metrics:metrics-jankstats -> androidx.metrics:metrics-performance
 # (stable 1.0.0 on Google Maven, checked 2026-08-22); the API is unchanged
@@ -52,6 +53,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 oboe = { group = "com.google.oboe", name = "oboe", version.ref = "oboe" }
 androidx-metrics-performance = { group = "androidx.metrics", name = "metrics-performance", version.ref = "metricsPerformance" }
 json-schema-validator = { group = "com.networknt", name = "json-schema-validator", version.ref = "jsonSchemaValidator" }
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit-ext = { group = "androidx.test.ext", name = "junit", version.ref = "junitExt" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
