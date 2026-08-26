@@ -6,14 +6,14 @@ import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import com.keyquest.app.notation.NotationPrototypeScreen
+import com.keyquest.app.ui.LessonPlayerScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                NotationPrototypeScreen()
+                LessonPlayerScreen()
             }
         }
     }
@@ -21,8 +21,8 @@ class MainActivity : ComponentActivity() {
 
 @Preview(showBackground = true, widthDp = 720, heightDp = 360)
 @Composable
-private fun NotationPrototypePreview() {
+private fun LessonPlayerPreview() {
     MaterialTheme {
-        NotationPrototypeScreen()
+        LessonPlayerScreen()
     }
 }

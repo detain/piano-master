@@ -56,6 +56,17 @@ import kotlinx.coroutines.withContext
  *
  * @param frameClock optional injectable frame clock (test harness); when null
  *   the composition's default [MonotonicFrameClock] is used.
+ * @param feedback per-note verdicts and hit beats (plan P1.6.5), reused across
+ *   frames and read in place — never triggers a layout rebuild. Both arrays
+ *   are index-parallel to [ProtoScore.notes] (the canonical scorer order, and
+ *   the same order [NoteLayoutSet.notes] is built in), so `verdicts[i]` colors
+ *   exactly the note drawn at index `i`. When null, every note renders neutral
+ *   with no pop.
+ * @param reducedMotion when true, feedback is color-only (plan P1.6.6): hit
+ *   notes still take the hit color, but the pop animation is suppressed.
+ * @param externalSongTimeBeats when non-null, the draw position uses this value
+ *   INSTEAD of the internal accumulated songTimeBeats (the internal clock keeps
+ *   running but is unused — the prototype screen passes null).
  */
 @Composable
 fun ScrollingNotationPlayer(
@@ -67,6 +78,9 @@ fun ScrollingNotationPlayer(
     lookaheadBeats: Double = DEFAULT_LOOKAHEAD_BEATS,
     playing: Boolean = true,
     frameClock: MonotonicFrameClock? = null,
+    feedback: NoteFeedback? = null,
+    reducedMotion: Boolean = false,
+    externalSongTimeBeats: Double? = null,
 ) {
     var songTimeBeats by remember { mutableDoubleStateOf(0.0) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
@@ -141,7 +155,7 @@ fun ScrollingNotationPlayer(
             .onSizeChanged { viewportSize = it },
     ) {
         val set = layoutSet ?: return@Canvas
-        val songTime = songTimeBeats
+        val songTime = externalSongTimeBeats ?: songTimeBeats
         val viewportW = size.width
         val playheadX = size.width * LayoutMath.DEFAULT_PLAYHEAD_FRACTION
 
@@ -173,12 +187,21 @@ fun ScrollingNotationPlayer(
         }
 
         // Notes: translate + draw only, no per-frame layout or allocation.
-        for (layout in set.notes) {
+        // Feedback arrays are index-parallel to score.notes (see NoteFeedback),
+        // and set.notes preserves that order (NoteLayoutBuilder appends 1:1),
+        // so index i maps to exactly the note the scorer judged.
+        val feedbackVerdicts = feedback?.verdicts
+        val feedbackHitBeats = feedback?.hitBeats
+        val nowBeats = songTime.toFloat()
+        for (index in set.notes.indices) {
+            val layout = set.notes[index]
             if (!layout.isVisible(songTime, pxPerBeat, viewportW)) continue
             val sx = layout.screenX(songTime, pxPerBeat)
+            val verdict = feedbackVerdicts?.get(index) ?: NoteFeedback.OPEN
+            val hitBeat = feedbackHitBeats?.get(index) ?: -1f
             when (skin) {
-                NotationSkin.NoteBar -> drawNoteBarNote(layout, sx, set.noteBar, glyphs)
-                NotationSkin.Staff -> drawStaffNote(layout, sx, set.staff, glyphs)
+                NotationSkin.NoteBar -> drawNoteBarNote(layout, sx, set.noteBar, glyphs, verdict, hitBeat, nowBeats, reducedMotion)
+                NotationSkin.Staff -> drawStaffNote(layout, sx, set.staff, glyphs, verdict)
             }
         }
 
@@ -222,18 +245,31 @@ private fun DrawScope.drawNoteBarNote(
     sx: Float,
     bar: NoteBarLayout?,
     glyphs: PreMeasuredGlyphs,
+    feedbackVerdict: Int,
+    hitBeat: Float,
+    nowBeats: Float,
+    reducedMotion: Boolean,
 ) {
     val laneHeight = bar?.laneHeightPx ?: 24f
-    val color = if (layout.note.hand == 'L') {
-        NotationSkin.NoteBar.neutralLeft
-    } else {
-        NotationSkin.NoteBar.neutralRight
+    val color = when (feedbackVerdict) {
+        NoteFeedback.PERFECT, NoteFeedback.GOOD -> NotationSkin.NoteBar.hit
+        NoteFeedback.MISSED, NoteFeedback.WRONG -> NotationSkin.NoteBar.miss
+        else -> if (layout.note.hand == 'L') {
+            NotationSkin.NoteBar.neutralLeft
+        } else {
+            NotationSkin.NoteBar.neutralRight
+        }
     }
     val topLeft = Offset(sx, layout.y - layout.height / 2f)
+    val size = Size(layout.width, layout.height)
+    val popScale = popScale(nowBeats, hitBeat, reducedMotion)
     drawRoundRect(
         color = color,
-        topLeft = topLeft,
-        size = Size(layout.width, layout.height),
+        topLeft = Offset(
+            topLeft.x + size.width * (1f - popScale) / 2f,
+            topLeft.y + size.height * (1f - popScale) / 2f,
+        ),
+        size = Size(size.width * popScale, size.height * popScale),
         cornerRadius = androidx.compose.ui.geometry.CornerRadius(laneHeight * 0.22f),
     )
     val label = glyphs.labels[layout.label] ?: return
@@ -248,6 +284,19 @@ private fun DrawScope.drawNoteBarNote(
             layout.y - labelHeight / 2f,
         ),
     )
+}
+
+/**
+ * Hit-pop scale for a note-bar: the bar grows to 1 + [POP_GROWTH_FRACTION] at
+ * the instant of the hit and decays back to 1 over [POP_DECAY_BEATS] of song
+ * time. Returns `1f` (no pop) when there is no hit, the decay window has
+ * closed, or reduced motion is enabled. Pure float math — no allocation.
+ */
+private fun popScale(nowBeats: Float, hitBeat: Float, reducedMotion: Boolean): Float {
+    if (reducedMotion || hitBeat < 0f) return 1f
+    val age = nowBeats - hitBeat
+    if (age < 0f || age > POP_DECAY_BEATS) return 1f
+    return 1f + POP_GROWTH_FRACTION * (1f - age / POP_DECAY_BEATS)
 }
 
 // ---------------------------------------------------------------------------
@@ -327,9 +376,17 @@ private fun DrawScope.drawStaffNote(
     sx: Float,
     staff: StaffLayout?,
     glyphs: PreMeasuredGlyphs,
+    feedbackVerdict: Int,
 ) {
     val space = staff?.spacePx ?: NoteLayoutBuilder.STAFF_SPACE_PX
     val noteColor = NotationSkin.Staff.noteColor
+    // Feedback colors the notehead only (plan P1.6.5); stems and ledger lines
+    // keep the neutral ink. No pop for the staff skin — color-only, minimal.
+    val noteheadColor = when (feedbackVerdict) {
+        NoteFeedback.PERFECT, NoteFeedback.GOOD -> NotationSkin.NoteBar.hit
+        NoteFeedback.MISSED, NoteFeedback.WRONG -> NotationSkin.NoteBar.miss
+        else -> noteColor
+    }
     val centerX = sx + layout.width / 2f
     val centerY = layout.y
 
@@ -370,9 +427,9 @@ private fun DrawScope.drawStaffNote(
         bottom = centerY + layout.height / 2f,
     )
     if (isWhole || isHalf) {
-        drawOval(color = noteColor, topLeft = rect.topLeft, size = rect.size, style = HOLLOW_NOTE_STROKE)
+        drawOval(color = noteheadColor, topLeft = rect.topLeft, size = rect.size, style = HOLLOW_NOTE_STROKE)
     } else {
-        drawOval(color = noteColor, topLeft = rect.topLeft, size = rect.size)
+        drawOval(color = noteheadColor, topLeft = rect.topLeft, size = rect.size)
     }
 
     // Display-only accidental (Bravura) to the left of the notehead.
@@ -518,6 +575,8 @@ private const val ACCIDENTAL_GLYPH_PX = 16f
 private const val BRACE_X = 3f
 private const val BRACE_CONTROL_DX = 4f
 private const val MAX_FRAME_DELTA_NANOS = 100_000_000L // 100ms defense clamp
+private const val POP_DECAY_BEATS = 0.25f // hit-pop decay window, in song-time beats
+private const val POP_GROWTH_FRACTION = 0.15f // peak hit-pop growth above 1f
 
 // Pre-built Stroke objects so the per-frame draw path never allocates a style.
 private val TIE_STROKE = Stroke(width = TIE_STROKE_PX)
