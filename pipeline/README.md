@@ -126,14 +126,17 @@ errors, pooled chord recall, pooled octave-error rate). Wrappers live in
 engine's `yin_cli` host tool, P0.3.3), `BasicPitchWrapper` (optional). The
 `pipeline eval` CLI accepts `--wrapper ground-truth|pyin|engine-yin`.
 
-## Model bake-off status (P0.3.3, partial)
+## Model bake-off status (P0.3.3)
 
 Three candidate models are scored by this harness: (a) Magenta Onsets-and-
 Frames TFLite, (b) Spotify Basic Pitch, (c) the engine's C++ YIN as the floor.
-This is **partial progress only** — the real-scoring bake-off (MAESTRO, DGX
-captures, device phones) awaits P0.3.2 test-set assembly and data
-availability. The numbers below are on the synthetic clean melody
-(`make_clean_melody` in `pipeline/eval/synth.py`, 10 notes at 22050 Hz).
+The harness is now **validated against a published result** (P0.3.1 acceptance
+step: Basic Pitch Fno 0.639 vs published 0.709, PASS 2026-08-26 — see
+"Validation result" below), so the numbers it produces are trustworthy. The
+on-device bake-off (DGX captures, device phones) still awaits P0.3.2 test-set
+assembly and hardware; until then the reference points are the synthetic
+clean-melody floors (`make_clean_melody` in `pipeline/eval/synth.py`, 10
+notes at 22050 Hz) and the Basic Pitch MAESTRO comparison.
 
 | wrapper | engine | synthetic F1 | onset med (s) | notes est/ref |
 |---------|--------|-------------:|--------------:|--------------:|
@@ -160,31 +163,57 @@ Attempt outcomes:
   `EngineYinWrapper` resolves it via `KEYQUEST_YIN_CLI` or
   `engine/build/yin_cli` relative to the repo root and fails loudly when it
   is missing.
-- **Magenta Onsets-and-Frames TFLite: BLOCKED — no published TFLite artifact
-  exists.** Magenta GitHub releases ship no binary assets (verified across
-  all releases via the GitHub API); the magentadata GCS bucket 404s every
-  plausible `onsets_frames_big_tflite` URL; Kaggle hosts no OAF model. The
-  only published artifacts are a TF checkpoint (`maestro_checkpoint.zip`) and
-  a TF Hub SavedModel — exporting either to TFLite requires the training
-  graph and a TensorFlow install. Separately, `tflite-runtime` ships **no
-  Python 3.12 wheels** (PyPI has zero cp312 builds; latest 2.14.0), so the
-  interpreter cannot be installed in this venv even if a model were found.
-  `OafTfliteWrapper` stays a documented skeleton until both lift.
-- **Spotify Basic Pitch: BLOCKED — dependency pin.** basic-pitch 0.4.0 pins
-  `tensorflow>=2.4.1,<2.15.1`; tensorflow 2.15 ships no cp312 wheels (the
-  earliest Python 3.12 build is 2.16), so pip has no satisfiable resolution
-  in this Python 3.12 venv. `BasicPitchWrapper` raises a descriptive
-  `RuntimeError`; run it in a Python < 3.12 environment.
+- **Spotify Basic Pitch: RUNNING.** basic-pitch 0.4.0 executes in the conda
+  `py311` env (Python 3.11.15, tensorflow 2.15.0, `setuptools` 80.10.2 — see
+  the unblock recipe below). Published-number comparison GREEN: Fno 0.639 vs
+  0.709 on the 8-piece duration-stratified v3 test subset, ±0.15 gate, exit 0
+  on 2026-08-26 (commit `ce17e68`); note-level F with offsets (0.076) is
+  informational. `BasicPitchWrapper`'s lazy import stays safe to leave
+  installed, and now unpacks basic-pitch 0.4.0's 5-field note tuples
+  (previously assumed 4 — wrong onset/offset/pitch extraction).
+- **Magenta Onsets-and-Frames TFLite: BLOCKED — still no published TFLite
+  artifact; checkpoint-export attempt in progress.** Magenta GitHub releases
+  ship no binary assets (verified across all releases via the GitHub API);
+  the magentadata GCS bucket 404s every plausible `onsets_frames_big_tflite`
+  URL; Kaggle hosts no OAF model; the tfhub.dev SavedModel URL is dead. The
+  only surviving artifact is the GCS checkpoint
+  (`maestro_checkpoint.zip`), downloaded to `/home/sites/maestro/oaf/`.
+  Exporting it to TFLite requires the training graph: magenta 2.1.4 is
+  installed `--no-deps` into the conda `py311-oaf` env (with note-seq +
+  tensorflow 2.15.0) and the TF checkpoint restore is in progress — result
+  unknown, both outcomes will be documented. `OafTfliteWrapper` stays a
+  documented skeleton until a working export lands.
 
-Real-scoring against MAESTRO is additionally blocked on data: the magentadata
-GCS bucket stores no individually downloadable wavs for v3.0.0/v2.0.0 (only
-65–96 GB zips/tfrecords), so `validate_maestro.py` re-runs the moment the
-data is obtainable.
+Real-scoring against MAESTRO is unblocked on data: although the magentadata
+GCS bucket stores no individually downloadable wavs (verified via the GCS
+JSON API — only the 65–96 GB aggregated zips and tfrecords; individual-wav
+URL patterns 404 for both v3.0.0 and v2.0.0), the 108 GB
+`maestro-v3.0.0.zip` was downloaded to `/home/sites/maestro/` and the subset
+wavs extracted into the harness workdir `audio/`. `validate_maestro.py`
+accepts pre-populated files (`> 1024` bytes) and skips the dead URLs.
+
+### Unblock recipe (published-number comparison)
+
+```bash
+conda create -n py311 python=3.11   # basic-pitch pins tensorflow>=2.4.1,<2.15.1 — no cp312 wheels
+conda activate py311
+pip install "setuptools<81"         # REQUIRED: setuptools 81+ removed pkg_resources; resampy + tensorflow-hub import it
+pip install -e ".[dev]"             # harness deps (mir_eval, numpy, ...)
+pip install basic-pitch==0.4.0 tensorflow==2.15.0
+python -m pipeline.eval.validate_maestro --workdir /tmp/opencode/maestro --require-comparison
+```
 
 ### Validation result (the P0.3.1 acceptance step)
 
-Published target: Spotify Basic Pitch — note F1 ≈ 0.82, onset error ≈ 0.052 s
-on MAESTRO ("A Lightweight and Real-Time ... Basic Pitch").
+- **Published target corrected: Basic Pitch's headline is Fno, not F.** The
+  earlier "note F1 ≈ 0.82" was Onsets-and-Frames' number (Hawthorne et al.
+  2018, note F1 0.8226 on MAESTRO test), misattributed to Basic Pitch.
+  Bittner et al. 2022 ("A Lightweight Instrument-Agnostic Model for
+  Polyphonic Note Transcription and Multipitch Estimation", ICASSP 2022,
+  arXiv:2203.09893) reports **Fno 0.709 on the MAESTRO v2 test split** and
+  explains the choice: *"We use Fno as the main measure of overall note
+  estimation accuracy since the definition of offsets is less objective than
+  onsets (e.g. due to reverberation, sustain pedal, annotation procedure)."*
 
 - **Onset-error convention: to confirm.** The 0.052 s comparison uses the
   harness's mean absolute onset error over onset-matched events, but the
@@ -199,21 +228,19 @@ on MAESTRO ("A Lightweight and Real-Time ... Basic Pitch").
   error and the pyin floor at F1 = 1.0 (actual, on a clean 10-note synthetic
   melody; threshold is 0.8). See `tests/test_eval_harness.py` (all offline,
   ~3 s).
-- **Published-number comparison: BLOCKED on two independent fronts.** The
-  harness and the validation runner (`python -m pipeline.eval.validate_maestro`)
-  are complete and will perform the comparison the moment both lift:
-  1. **basic-pitch cannot install on Python 3.12.** basic-pitch 0.4.0 pins
-     `tensorflow>=2.4.1,<2.15.1`; tensorflow 2.15 ships no cp312 wheels (the
-     earliest 3.12 build is 2.16), so pip has no satisfiable resolution.
-     Workaround: run the comparison in a Python < 3.12 venv.
-  2. **MAESTRO audio is not individually downloadable.** The magentadata GCS
-     bucket stores no individual wav objects for v3.0.0 or v2.0.0 (verified
-     via `storage/v1/b/magentadata/o` — only the 65–96 GB aggregated
-     `maestro-vX.Y.Z.zip` files and tfrecords). URL patterns tried, all HTTP
-     404: `https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/<audio_filename>`
-     and the v2.0.0 equivalent.
-- Until the blockers lift, calibration rests on the mir_eval fixture check and
-  the bake-off task (P0.3.3) provides runnable published baselines.
+- **Published-number comparison: RUNS and PASSES.** `python -m
+  pipeline.eval.validate_maestro` exits 0 (2026-08-26, commit `ce17e68`):
+  Basic Pitch scores **Fno 0.639** on the 8-piece duration-stratified v3
+  test subset (pieces spread evenly across the duration range; the shortest
+  ones are dense etudes) vs the published 0.709 — inside the ±0.15 gate
+  (subset+version caveats: 8-piece v3 subset vs full v2 test). Note-level F
+  **with** offsets is 0.076 and is reported informational only: the subset's
+  short pieces punish the `offset_ratio` 0.2 criterion (absolute offset
+  tolerance scales with note duration), which is exactly the paper's stated
+  reason for preferring Fno. 11 harness tests green.
+- With the mir_eval fixture check and the GREEN published baseline, the
+  harness is calibrated; the P0.3.3 bake-off continues with the OAF export
+  attempt above and the device bench when hardware lands.
 
 ## Determinism (§8.2.10)
 

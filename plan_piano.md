@@ -2661,7 +2661,19 @@ real reason the educator is the first hire, not the last.
 ## 24. Build Status Log
 
 > Maintained by the build orchestrator as implementation proceeds. Each entry records what shipped, the commits, verification evidence, and environment state. This section is the spec-of-record companion to the working tree.
-> **LATEST (2026-08-26):** P1.6 lesson player IMPLEMENTED — D1 RealtimeScorer (0b28af0), D2 data/session layer (5226130), D3 lesson player UI (1ca619b), D4 Paparazzi screenshots + CI (1c52e85). 218 tests green locally; CI verification in flight. See the entry below.
+> **LATEST (2026-08-26, afternoon):** P0.3.3 bake-off VALIDATED — validate_maestro unblocked + GREEN (Basic Pitch Fno 0.639 vs published 0.709, ±0.15 gate, exit 0; commit `ce17e68`); P0.8.2 clearance records DONE (18 files, `c26a6f5`). Both on master, push pending. See the entry below.
+
+### 2026-08-26 (afternoon) — P0.3.3 bake-off: validate_maestro UNBLOCKED + GREEN; P0.8.2 clearance records DONE
+
+**Commits:** `ce17e68` (P0.3.3) + `c26a6f5` (P0.8.2, earlier same day). On master; push pending (ahead 2).
+
+**What shipped:**
+- **Published-number comparison RUNS + PASSES:** Basic Pitch scored on the 8-piece duration-stratified v3 test subset (spread evenly across the duration range; shortest pieces are dense etudes) → **Fno 0.639 vs published 0.709** (Bittner et al. 2022, MAESTRO v2 test), ±0.15 gate, exit 0 on 2026-08-26. Note-level F with offsets (0.076) informational only — the subset's short pieces punish the `offset_ratio` 0.2 criterion, which is exactly the paper's stated reason for preferring Fno.
+- **Target correction:** 0.8226 is Onsets-and-Frames' note F1 (Hawthorne et al. 2018), misattributed to Basic Pitch in the earlier draft. Basic Pitch's headline is Fno (no-offset) 0.709 — "We use Fno as the main measure of overall note estimation accuracy since the definition of offsets is less objective than onsets". Added `note_precision_recall_f1_no_offset` (offset_ratio 1e9); `BasicPitchWrapper` unpack fix for basic-pitch 0.4.0 5-field note tuples. 11 harness tests green.
+- **Unblock recipe:** conda `py311` env (Python 3.11 — basic-pitch pins `tensorflow>=2.4.1,<2.15.1`, no cp312 wheels); `setuptools<81` REQUIRED (81+ removed pkg_resources; resampy + tensorflow-hub import it); 108 GB `maestro-v3.0.0.zip` at `/home/sites/maestro/`; subset wavs extracted from the zip into workdir `audio/` (harness accepts pre-populated >1024-byte files; individual-wav URLs 404). Full recipe in pipeline/README.md "Unblock recipe".
+- **P0.8.2 DONE:** 18 per-song PD clearance records (15 primary + 3 alternates) from candidates-2026-08 research into `content/rights/records/`; all GLOBALLY PD or CLEARED-WITH-NOTE; editions pinned (Fromont #83536, Stark #02607); do-not-copy layers recorded; §8 sign-off pending P0.8.4 legal gate.
+
+**Next:** push + CI 5/5; OAF checkpoint→TFLite export attempt pending (checkpoint at /home/sites/maestro/oaf/, magenta 2.1.4 `--no-deps` in conda `py311-oaf`, TF restore in progress — result unknown, document both outcomes); 8h idle soak ~19:57Z 2026-08-26 (verify `SOAK_8H_IDLE_TEST_PASS` → write docs/runbooks/soak-results-2026-08-26.md mirroring the 08-22 runbook); P0.3.6 model ADR once numbers complete; hardware-gated tasks unchanged.
 
 ### 2026-08-26 — P1.6 lesson player implemented (D1–D4, 4 commits)
 
